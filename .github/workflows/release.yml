@@ -2,7 +2,8 @@ name: Release
 
 # Pushing a tag like v4.5.8-1 builds, tests and publishes a GitHub Release. The first part of
 # the version is the YARA version that yara4j follows, the number after the dash counts the
-# yara4j releases for that YARA version.
+# yara4j releases for that YARA version. Tags with a -beta.N or -rc.N suffix, like
+# v4.5.8-1-beta.1, are published as pre-releases of that release.
 
 on:
   push:
@@ -24,11 +25,14 @@ jobs:
 
       - name: Check the tag
         run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-[0-9]+$ ]]; then
-            echo "::error::Release tags must look like v4.5.8-1 (YARA version, dash, yara4j release number)"
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-[0-9]+(-(beta|rc)\.[0-9]+)?$ ]]; then
+            echo "::error::Release tags must look like v4.5.8-1 (YARA version, dash, yara4j release number), optionally followed by -beta.N or -rc.N"
             exit 1
           fi
           yara_version="${BASH_REMATCH[1]}"
+          if [[ -n "${BASH_REMATCH[2]}" ]]; then
+            echo "PRERELEASE=true" >> "$GITHUB_ENV"
+          fi
           pom_version=$(mvn -B -q -ntp help:evaluate -Dexpression=project.version -DforceStdout)
           if [[ "${pom_version%-SNAPSHOT}" != "$yara_version" ]]; then
             echo "::error::Tag $GITHUB_REF_NAME doesn't match the project version $pom_version"
@@ -55,6 +59,10 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME" dist/*
-          --verify-tag --title "yara4j $VERSION" --generate-notes
+        run: |
+          flags=()
+          if [[ "$PRERELEASE" == true ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag --title "yara4j $VERSION" --generate-notes "${flags[@]}"

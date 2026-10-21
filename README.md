@@ -58,13 +58,16 @@ libraries with Maven, install them in your local repository with `mvn install`, 
 
 Versions look like `4.5.8-1`: the first part is the YARA version that yara4j follows, the
 number after the dash counts the yara4j releases for that YARA version (fixes, dependency
-updates). The version in the POMs stays `4.5.8-SNAPSHOT` between releases.
+updates). Pre-releases add `-beta.N` or `-rc.N`: `4.5.8-1-beta.1`, `4.5.8-1-beta.2` and
+`4.5.8-1-rc.1` come before `4.5.8-1`, in that order, also for Maven. They are published as
+GitHub pre-releases, so the latest release stays a stable one. The version in the POMs stays
+`4.5.8-SNAPSHOT` between releases.
 
 To publish a release, push a tag named after the version:
 
 ```bash
-git tag v4.5.8-1
-git push origin v4.5.8-1
+git tag v4.5.8-1-beta.1
+git push origin v4.5.8-1-beta.1
 ```
 
 The [release workflow](.github/workflows/release.yml) checks that the tag matches the
