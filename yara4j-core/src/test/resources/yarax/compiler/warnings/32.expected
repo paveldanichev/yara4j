@@ -1,0 +1,10 @@
+WARNING: line 3: test_1: string "$a" may slow down scanning
+WARNING: line 5: test_1: string "$c" may slow down scanning
+WARNING: line 12: test_2: string "$a" may slow down scanning
+WARNING: line 14: test_2: string "$c" may slow down scanning
+WARNING: line 21: test_3: string "$a" may slow down scanning
+WARNING: line 23: test_3: string "$c" may slow down scanning
+WARNING: line 31: test_4: string "$b" may slow down scanning
+WARNING: line 32: test_4: string "$c" may slow down scanning
+WARNING: line 40: test_5: string "$a" may slow down scanning
+RESULT 0 -

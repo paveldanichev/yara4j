@@ -1,0 +1,3 @@
+ERROR: line 1: unknown module "test_proto2"
+ERROR: line 4: invalid field name "nested"
+ERROR: line 9: invalid field name "nested"

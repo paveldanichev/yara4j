@@ -1,0 +1,2 @@
+WARNING: line 3: test: string "$a" may slow down scanning
+RESULT 0 -

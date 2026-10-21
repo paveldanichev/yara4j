@@ -1,0 +1,2 @@
+WARNING: line 7: test: multiple strings at an offset is usually false.
+RESULT 0 -

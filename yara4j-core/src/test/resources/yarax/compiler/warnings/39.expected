@@ -1,0 +1,2 @@
+ERROR: line 1: unknown module "test_proto2"
+ERROR: line 5: invalid field name "deprecated"

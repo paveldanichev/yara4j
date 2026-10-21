@@ -1,0 +1,2 @@
+# Test data and expected outputs are compared byte for byte: never convert line endings.
+yara4j-core/src/test/resources/** -text

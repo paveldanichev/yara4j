@@ -1,0 +1,67 @@
+	number_of_signatures = 1
+	is_signed = 1
+	signatures
+		[0]
+			thumbprint = "8490768240e82095539a206e4351440149f3d46d"
+			issuer = "/C=US/O=Test/CN=Intermediate CA"
+			subject = "/CN=20 byte serial"
+			version = 3
+			algorithm = "sha256WithRSAEncryption"
+			algorithm_oid = "1.2.840.113549.1.1.11"
+			serial = "7f:01:02:03:04:05:06:07:08:09:0a:0b:0c:0d:0e:0f:10:11:12:13"
+			not_before = 1262304000
+			not_after = 2208988799
+			verified = 1
+			digest_alg = "sha256"
+			digest = "f7939bb4eae105fa90f6c7412ccb6158a3674a99483a611fbd147297971c172c"
+			file_digest = "f7939bb4eae105fa90f6c7412ccb6158a3674a99483a611fbd147297971c172c"
+			number_of_certificates = 2
+			certificates
+				[0]
+					not_after = 2208988799
+					not_before = 1262304000
+					serial = "7f:01:02:03:04:05:06:07:08:09:0a:0b:0c:0d:0e:0f:10:11:12:13"
+					algorithm_oid = "1.2.840.113549.1.1.11"
+					algorithm = "sha256WithRSAEncryption"
+					version = 3
+					subject = "/CN=20 byte serial"
+					issuer = "/C=US/O=Test/CN=Intermediate CA"
+					thumbprint = "8490768240e82095539a206e4351440149f3d46d"
+				[1]
+					not_after = 2208988799
+					not_before = 1262304000
+					serial = "00:af:0f:c0:5d:d0:e4:fe:7a"
+					algorithm_oid = "1.2.840.113549.1.1.11"
+					algorithm = "sha256WithRSAEncryption"
+					version = 3
+					subject = "/C=US/O=Test/CN=Intermediate CA"
+					issuer = "/C=US/O=Test Root CA/CN=Root CA"
+					thumbprint = "1a4cbb98ae872b7a3c57139c8e5b2313d8218132"
+			signer_info
+				program_name = "yara4j test"
+				digest = "eb7430b85f713a3211f95ddbfb617850afbf7c3dec7a56f5f1d96f210f97d1d2"
+				digest_alg = "sha256"
+				length_of_chain = 2
+				chain
+					[0]
+						not_after = 2208988799
+						not_before = 1262304000
+						serial = "7f:01:02:03:04:05:06:07:08:09:0a:0b:0c:0d:0e:0f:10:11:12:13"
+						algorithm_oid = "1.2.840.113549.1.1.11"
+						algorithm = "sha256WithRSAEncryption"
+						version = 3
+						subject = "/CN=20 byte serial"
+						issuer = "/C=US/O=Test/CN=Intermediate CA"
+						thumbprint = "8490768240e82095539a206e4351440149f3d46d"
+					[1]
+						not_after = 2208988799
+						not_before = 1262304000
+						serial = "00:af:0f:c0:5d:d0:e4:fe:7a"
+						algorithm_oid = "1.2.840.113549.1.1.11"
+						algorithm = "sha256WithRSAEncryption"
+						version = 3
+						subject = "/C=US/O=Test/CN=Intermediate CA"
+						issuer = "/C=US/O=Test Root CA/CN=Root CA"
+						thumbprint = "1a4cbb98ae872b7a3c57139c8e5b2313d8218132"
+			number_of_countersignatures = 0
+			countersignatures

@@ -1,0 +1,2 @@
+ERROR: line 3: unknown module "test_proto2"
+ERROR: line 7: undefined identifier "with"

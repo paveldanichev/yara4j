@@ -1,0 +1,2 @@
+WARNING: line 4: test: using literal string "false" in a boolean operation.
+RESULT 1 -

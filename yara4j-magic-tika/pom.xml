@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.paveldan.yara4j</groupId>
+    <artifactId>yara4j-parent</artifactId>
+    <version>4.5.8-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>yara4j-magic-tika</artifactId>
+  <name>yara4j-magic-tika</name>
+  <description>Apache Tika based implementation of the YARA "magic" module.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.paveldan.yara4j</groupId>
+      <artifactId>yara4j-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

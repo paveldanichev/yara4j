@@ -1,0 +1,2 @@
+WARNING: line 3: test: $a contains .*, .+ or .{x,} consider using .{,N}, .{1,N} or {x,N} with a reasonable value for N
+RESULT 0 -

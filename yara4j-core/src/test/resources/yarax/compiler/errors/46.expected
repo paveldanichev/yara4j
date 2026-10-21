@@ -1,0 +1,2 @@
+WARNING: line 3: test: using deprecated "entrypoint" keyword. Use the "entry_point" function from PE module instead.
+RESULT 0 -

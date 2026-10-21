@@ -1,0 +1,121 @@
+	number_of_signatures = 1
+	is_signed = 1
+	signatures
+		[0]
+			thumbprint = "6e594acac518d3bb9984e2f64b69413a7fcc2a29"
+			issuer = "/C=US/O=Test/CN=Intermediate CA"
+			subject = "/C=US/ST=California/L=Menlo Park/O=Signer, Inc./OU=Ops/CN=Signer Inc"
+			version = 3
+			algorithm = "sha256WithRSAEncryption"
+			algorithm_oid = "1.2.840.113549.1.1.11"
+			serial = "7e:b9:e2:59:8a:12:1f:f9"
+			not_before = 1262304000
+			not_after = 2208988799
+			verified = 1
+			digest_alg = "sha256"
+			digest = "f7939bb4eae105fa90f6c7412ccb6158a3674a99483a611fbd147297971c172c"
+			file_digest = "f7939bb4eae105fa90f6c7412ccb6158a3674a99483a611fbd147297971c172c"
+			number_of_certificates = 4
+			certificates
+				[0]
+					not_after = 2208988799
+					not_before = 1262304000
+					serial = "7e:b9:e2:59:8a:12:1f:f9"
+					algorithm_oid = "1.2.840.113549.1.1.11"
+					algorithm = "sha256WithRSAEncryption"
+					version = 3
+					subject = "/C=US/ST=California/L=Menlo Park/O=Signer, Inc./OU=Ops/CN=Signer Inc"
+					issuer = "/C=US/O=Test/CN=Intermediate CA"
+					thumbprint = "6e594acac518d3bb9984e2f64b69413a7fcc2a29"
+				[1]
+					not_after = 2208988799
+					not_before = 1262304000
+					serial = "00:af:0f:c0:5d:d0:e4:fe:7a"
+					algorithm_oid = "1.2.840.113549.1.1.11"
+					algorithm = "sha256WithRSAEncryption"
+					version = 3
+					subject = "/C=US/O=Test/CN=Intermediate CA"
+					issuer = "/C=US/O=Test Root CA/CN=Root CA"
+					thumbprint = "1a4cbb98ae872b7a3c57139c8e5b2313d8218132"
+				[2]
+					not_after = 2208988799
+					not_before = 1262304000
+					serial = "4e:91:02:62:ce:86:d9:d7"
+					algorithm_oid = "1.2.840.113549.1.1.5"
+					algorithm = "sha1WithRSAEncryption"
+					version = 3
+					subject = "/C=US/O=Time/CN=Timestamp Signer"
+					issuer = "/C=ZA/O=TSA Root CA/CN=TSA CA"
+					thumbprint = "38dbfdfb45ec85cb8a5c055a5979d3da52b66d25"
+				[3]
+					not_after = 2208988799
+					not_before = 1262304000
+					serial = "4e:91:02:62:ce:86:d9:d7"
+					algorithm_oid = "1.2.840.113549.1.1.5"
+					algorithm = "sha1WithRSAEncryption"
+					version = 3
+					subject = "/C=US/O=Time/CN=Timestamp Signer"
+					issuer = "/C=ZA/O=TSA Root CA/CN=TSA CA"
+					thumbprint = "38dbfdfb45ec85cb8a5c055a5979d3da52b66d25"
+			signer_info
+				program_name = "yara4j test"
+				digest = "eb7430b85f713a3211f95ddbfb617850afbf7c3dec7a56f5f1d96f210f97d1d2"
+				digest_alg = "sha256"
+				length_of_chain = 2
+				chain
+					[0]
+						not_after = 2208988799
+						not_before = 1262304000
+						serial = "7e:b9:e2:59:8a:12:1f:f9"
+						algorithm_oid = "1.2.840.113549.1.1.11"
+						algorithm = "sha256WithRSAEncryption"
+						version = 3
+						subject = "/C=US/ST=California/L=Menlo Park/O=Signer, Inc./OU=Ops/CN=Signer Inc"
+						issuer = "/C=US/O=Test/CN=Intermediate CA"
+						thumbprint = "6e594acac518d3bb9984e2f64b69413a7fcc2a29"
+					[1]
+						not_after = 2208988799
+						not_before = 1262304000
+						serial = "00:af:0f:c0:5d:d0:e4:fe:7a"
+						algorithm_oid = "1.2.840.113549.1.1.11"
+						algorithm = "sha256WithRSAEncryption"
+						version = 3
+						subject = "/C=US/O=Test/CN=Intermediate CA"
+						issuer = "/C=US/O=Test Root CA/CN=Root CA"
+						thumbprint = "1a4cbb98ae872b7a3c57139c8e5b2313d8218132"
+			number_of_countersignatures = 2
+			countersignatures
+				[0]
+					chain
+						[0]
+							thumbprint = "38dbfdfb45ec85cb8a5c055a5979d3da52b66d25"
+							issuer = "/C=ZA/O=TSA Root CA/CN=TSA CA"
+							subject = "/C=US/O=Time/CN=Timestamp Signer"
+							version = 3
+							algorithm = "sha1WithRSAEncryption"
+							algorithm_oid = "1.2.840.113549.1.1.5"
+							serial = "4e:91:02:62:ce:86:d9:d7"
+							not_before = 1262304000
+							not_after = 2208988799
+					length_of_chain = 1
+					digest = "6acf7f80c8b40c1b2dfc461fcc579841eceb869d"
+					digest_alg = "sha1"
+					sign_time = 1528216551
+					verified = 1
+				[1]
+					chain
+						[0]
+							thumbprint = "38dbfdfb45ec85cb8a5c055a5979d3da52b66d25"
+							issuer = "/C=ZA/O=TSA Root CA/CN=TSA CA"
+							subject = "/C=US/O=Time/CN=Timestamp Signer"
+							version = 3
+							algorithm = "sha1WithRSAEncryption"
+							algorithm_oid = "1.2.840.113549.1.1.5"
+							serial = "4e:91:02:62:ce:86:d9:d7"
+							not_before = 1262304000
+							not_after = 2208988799
+					length_of_chain = 1
+					digest = "852fdff429e6c5cb4eb822e2c141647a7c8010e863cd64af336190fa23d584b0"
+					digest_alg = "sha256"
+					sign_time = 1705307400
+					verified = 1

@@ -1,0 +1,14 @@
+WARNING: line 37: test_5: multiple strings at an offset is usually false.
+WARNING: line 41: test_6: string "$a" may slow down scanning
+ERROR: line 82: undefined identifier "with"
+WARNING: line 91: test_12: string "$s_1" may slow down scanning
+WARNING: line 92: test_12: string "$s_2" may slow down scanning
+WARNING: line 109: test_14: string "$placeholder_instruction" may slow down scanning
+WARNING: line 110: test_14: string "$placeholder_ftp" may slow down scanning
+WARNING: line 111: test_14: string "$context_ftp" may slow down scanning
+WARNING: line 112: test_14: string "$context_other" may slow down scanning
+WARNING: line 113: test_14: string "$harm_1" may slow down scanning
+WARNING: line 137: test_15: expression always false - requesting 3 of 1.
+WARNING: line 146: test_16: string "$dollar" may slow down scanning
+ERROR: line 156: integer overflow in "0xFFFFFFFFFFFFFFFF"
+ERROR: line 156: syntax error, unexpected end of file

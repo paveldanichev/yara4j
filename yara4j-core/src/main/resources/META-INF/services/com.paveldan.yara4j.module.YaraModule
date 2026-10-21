@@ -1,0 +1,13 @@
+com.paveldan.yara4j.modules.tests.TestsModule
+com.paveldan.yara4j.modules.math.MathModule
+com.paveldan.yara4j.modules.time.TimeModule
+com.paveldan.yara4j.modules.console.ConsoleModule
+com.paveldan.yara4j.modules.string.StringModule
+com.paveldan.yara4j.modules.hash.HashModule
+com.paveldan.yara4j.modules.elf.ElfModule
+com.paveldan.yara4j.modules.macho.MachoModule
+com.paveldan.yara4j.modules.dex.DexModule
+com.paveldan.yara4j.modules.pe.PeModule
+com.paveldan.yara4j.modules.dotnet.DotnetModule
+com.paveldan.yara4j.modules.cuckoo.CuckooModule
+com.paveldan.yara4j.modules.magic.MagicModule

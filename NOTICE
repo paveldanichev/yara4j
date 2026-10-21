@@ -1,0 +1,102 @@
+yara4j
+======
+
+yara4j is a Java port of YARA 4.5.8 (https://github.com/VirusTotal/yara),
+distributed under the BSD 3-Clause license (see LICENSE).
+
+This product includes software developed by third parties, listed below with
+their licenses. Only the components bundled in the artifact you distribute
+need to be mentioned in your own notices:
+
+- yara4j-core:        YARA (ported), authenticode-parser (ported), TLSH
+                      (ported), Bouncy Castle (runtime dependency).
+- yara4j-magic-tika:  Apache Tika core, Apache Commons IO, commonmark-java,
+                      SLF4J API (runtime dependencies).
+- yara4j-cli:         everything above, picocli and SLF4J NOP, all bundled in
+                      the shaded jar. The license and notice files of each
+                      bundled third-party jar are included unchanged in
+                      META-INF/licenses/<artifactId>/ of the shaded jar.
+
+
+YARA
+----
+The compiler, regular expression engine, scanner, modules and tests of yara4j
+are derived from YARA. Copyright (c) 2007-2016. The YARA Authors.
+License: BSD 3-Clause, reproduced in LICENSE. The test data under
+yara4j-core/src/test/resources/data comes from YARA's tests/data directory.
+
+
+YARA-X
+------
+The test cases under yara4j-core/src/test/resources/yarax (used by tests only,
+not included in any artifact) are derived from the tests of YARA-X
+(https://github.com/VirusTotal/yara-x). Copyright (c) 2024. The YARA-X Authors.
+License: BSD 3-Clause (same terms as YARA, reproduced in LICENSE).
+
+
+authenticode-parser
+-------------------
+The Authenticode signature parser of the "pe" module
+(com.paveldan.yara4j.modules.pe.Authenticode and related classes) is a port
+of authenticode-parser, bundled with YARA.
+
+Copyright (c) 2021 Avast Software
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+TLSH
+----
+com.paveldan.yara4j.util.Tlsh, used by elf.telfhash(), is a port of the TLSH
+C implementation bundled with YARA (libyara/tlshc), which derives from TLSH by
+Trend Micro (https://github.com/trendmicro/tlsh), dual licensed under the
+Apache License 2.0 and the BSD 3-Clause license.
+
+
+Bouncy Castle
+-------------
+Used by yara4j-core for Authenticode signature verification.
+Copyright (c) 2000-2024 The Legion of the Bouncy Castle Inc.
+(https://www.bouncycastle.org). License: MIT
+(https://www.bouncycastle.org/licence.html).
+
+
+Apache Tika, Apache Commons IO
+------------------------------
+Used by yara4j-magic-tika. Copyright The Apache Software Foundation.
+License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+
+
+commonmark-java
+---------------
+commonmark, commonmark-ext-gfm-tables and commonmark-ext-gfm-strikethrough
+(dependencies of Apache Tika core). Copyright (c) 2015, Atlassian Pty Ltd.
+License: BSD 2-Clause (https://github.com/commonmark/commonmark-java/blob/main/LICENSE.txt).
+
+
+picocli
+-------
+Used by yara4j-cli. Copyright 2017 Remko Popma.
+License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
+
+
+SLF4J
+-----
+slf4j-api (dependency of Apache Tika) and slf4j-nop (yara4j-cli).
+Copyright (c) 2004-2023 QOS.ch. License: MIT (https://www.slf4j.org/license.html).

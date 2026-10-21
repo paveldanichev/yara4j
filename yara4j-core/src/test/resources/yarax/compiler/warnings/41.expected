@@ -1,0 +1,2 @@
+WARNING: line 20: long_hex_seq: string "$h" may slow down scanning
+RESULT 0 -

@@ -1,0 +1,67 @@
+	number_of_signatures = 1
+	is_signed = 1
+	signatures
+		[0]
+			thumbprint = "915d1559401add8609d5e20f84100216d668fdaf"
+			issuer = "/CN=NoExt Root"
+			subject = "/CN=NoExt Leaf"
+			version = 3
+			algorithm = "sha256WithRSAEncryption"
+			algorithm_oid = "1.2.840.113549.1.1.11"
+			serial = "02"
+			not_before = 1262304000
+			not_after = 2208988799
+			verified = 1
+			digest_alg = "sha256"
+			digest = "f7939bb4eae105fa90f6c7412ccb6158a3674a99483a611fbd147297971c172c"
+			file_digest = "f7939bb4eae105fa90f6c7412ccb6158a3674a99483a611fbd147297971c172c"
+			number_of_certificates = 2
+			certificates
+				[0]
+					not_after = 2208988799
+					not_before = 1262304000
+					serial = "02"
+					algorithm_oid = "1.2.840.113549.1.1.11"
+					algorithm = "sha256WithRSAEncryption"
+					version = 3
+					subject = "/CN=NoExt Leaf"
+					issuer = "/CN=NoExt Root"
+					thumbprint = "915d1559401add8609d5e20f84100216d668fdaf"
+				[1]
+					not_after = 2208988799
+					not_before = 1262304000
+					serial = "01"
+					algorithm_oid = "1.2.840.113549.1.1.11"
+					algorithm = "sha256WithRSAEncryption"
+					version = 3
+					subject = "/CN=NoExt Root"
+					issuer = "/CN=NoExt Root"
+					thumbprint = "ce71dfb61195519a077e7949b8e713a6dfe14632"
+			signer_info
+				program_name = "yara4j test"
+				digest = "eb7430b85f713a3211f95ddbfb617850afbf7c3dec7a56f5f1d96f210f97d1d2"
+				digest_alg = "sha256"
+				length_of_chain = 2
+				chain
+					[0]
+						not_after = 2208988799
+						not_before = 1262304000
+						serial = "02"
+						algorithm_oid = "1.2.840.113549.1.1.11"
+						algorithm = "sha256WithRSAEncryption"
+						version = 3
+						subject = "/CN=NoExt Leaf"
+						issuer = "/CN=NoExt Root"
+						thumbprint = "915d1559401add8609d5e20f84100216d668fdaf"
+					[1]
+						not_after = 2208988799
+						not_before = 1262304000
+						serial = "01"
+						algorithm_oid = "1.2.840.113549.1.1.11"
+						algorithm = "sha256WithRSAEncryption"
+						version = 3
+						subject = "/CN=NoExt Root"
+						issuer = "/CN=NoExt Root"
+						thumbprint = "ce71dfb61195519a077e7949b8e713a6dfe14632"
+			number_of_countersignatures = 0
+			countersignatures

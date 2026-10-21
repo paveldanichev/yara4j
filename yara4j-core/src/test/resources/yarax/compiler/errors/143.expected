@@ -1,0 +1,1 @@
+ERROR: line 1: can't open include file: src/compiler/tests/testdata/includes/included_error.yar

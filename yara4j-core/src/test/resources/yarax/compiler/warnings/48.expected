@@ -1,0 +1,4 @@
+WARNING: line 3: single_byte_pattern_1: string "$a" may slow down scanning
+WARNING: line 4: single_byte_pattern_1: string "$b" may slow down scanning
+WARNING: line 13: single_byte_pattern_2: string "$a" may slow down scanning
+RESULT 0 -

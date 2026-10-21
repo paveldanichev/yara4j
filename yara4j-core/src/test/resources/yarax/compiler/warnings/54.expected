@@ -1,0 +1,5 @@
+ERROR: line 5: undefined identifier "uint64"
+ERROR: line 10: undefined identifier "uint64"
+ERROR: line 15: undefined identifier "uint64"
+ERROR: line 20: integer overflow in "0xFFFFFFFFFFFFFFFF"
+ERROR: line 20: syntax error, unexpected end of file

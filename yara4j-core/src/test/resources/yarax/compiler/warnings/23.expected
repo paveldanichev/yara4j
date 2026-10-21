@@ -1,0 +1,4 @@
+WARNING: line 3: test_1: string "$a" may slow down scanning
+WARNING: line 10: test_2: $a contains .*, .+ or .{x,} consider using .{,N}, .{1,N} or {x,N} with a reasonable value for N
+WARNING: line 10: test_2: string "$a" may slow down scanning
+RESULT 0 -
