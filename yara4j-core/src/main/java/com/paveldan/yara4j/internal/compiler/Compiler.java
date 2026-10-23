@@ -672,6 +672,13 @@ public final class Compiler implements Lexer.Host {
       parseRules();
     } catch (FatalError e) {
       // parsing aborted
+    } catch (StackOverflowError e) {
+      // A last resort: expressions and groups in regular expressions and hex strings have
+      // explicit limits, which a thread with a small stack may still not reach. It isn't
+      // entirely safe, since a class whose initialization the overflow interrupted stays
+      // unusable. Reporting the error makes the compiler unusable, so the rule left half
+      // compiled can't be returned by getRules.
+      reportSyntax("rules nested too deeply", errorLine());
     } finally {
       while (fileNames.size() > depth) {
         fileNames.pop();
@@ -1691,8 +1698,30 @@ public final class Compiler implements Lexer.Host {
     }
   }
 
+  /**
+   * Maximum nesting of expressions. libyara's Bison parser fails with "memory exhausted" at a
+   * deeper nesting, but this recursive descent parser and the evaluation of conditions would
+   * need a large thread stack.
+   */
+  static final int MAX_EXPRESSION_DEPTH = 1000;
+
+  private int expressionDepth;
+
   /** Precedence climbing parser for expressions. */
   private Expr parseExpression(int minPrec) {
+    if (expressionDepth == MAX_EXPRESSION_DEPTH) {
+      reportSyntax("expression nested too deeply", errorLine());
+      throw new ParseError();
+    }
+    expressionDepth++;
+    try {
+      return parseExpressionUnlimited(minPrec);
+    } finally {
+      expressionDepth--;
+    }
+  }
+
+  private Expr parseExpressionUnlimited(int minPrec) {
     Expr left = parseUnary();
     while (true) {
       int prec = binaryPrecedence();
@@ -1708,10 +1737,10 @@ public final class Compiler implements Lexer.Host {
             Expr l = booleanExpression(left);
             Expr r = booleanExpression(parseExpression(prec + 1));
             if (op.type == Token.Type.AND) {
-              left = bool(new Nodes.And(l.node, r.node));
+              left = bool(Nodes.Chain.of(false, l.node, r.node));
               left.requiredStrings = r.requiredStrings + l.requiredStrings;
             } else {
-              left = bool(new Nodes.Or(l.node, r.node));
+              left = bool(Nodes.Chain.of(true, l.node, r.node));
               left.requiredStrings = Math.min(l.requiredStrings, r.requiredStrings);
             }
             break;

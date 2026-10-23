@@ -250,6 +250,7 @@ public final class ScanEngine {
       list.head = match;
     }
     list.count++;
+    list.changed();
     if (match.next != null) {
       match.next.prev = match;
     } else {
@@ -272,6 +273,7 @@ public final class ScanEngine {
       list.tail = match.prev;
     }
     list.count--;
+    list.changed();
     match.next = null;
     match.prev = null;
   }

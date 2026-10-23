@@ -280,6 +280,10 @@ public final class HexParser {
 
   private ReNode token() {
     if (tok == '(') {
+      // insideOr is the nesting of groups.
+      if (insideOr == Re.MAX_GROUP_NESTING) {
+        error("groups nested too deeply");
+      }
       next();
       insideOr++;
       ReNode n = alternatives();

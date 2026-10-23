@@ -11,6 +11,13 @@ public final class Re {
   public static final int MAX_FIBERS = 1024;
   public static final int STRING_CHAINING_THRESHOLD = 200;
 
+  /**
+   * Maximum nesting of groups in regular expressions and hex strings. libyara's Bison parsers
+   * accept deeper nesting, but parsing and compiling the AST here recurse at each level, and
+   * would need a large thread stack.
+   */
+  public static final int MAX_GROUP_NESTING = 1000;
+
   public static final int OP_ANY = 0xA0;
   public static final int OP_LITERAL = 0xA2;
   public static final int OP_MASKED_LITERAL = 0xA4;

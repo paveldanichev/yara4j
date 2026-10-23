@@ -162,6 +162,10 @@ relative `include` directives. To load included files from elsewhere (the classp
 database...), set an `IncludeResolver` with `setIncludeResolver`, or forbid includes with
 `disableIncludes()`.
 
+Like libyara, the default resolver opens any file, by absolute path or with `..`. When
+compiling rules that aren't trusted, use `disableIncludes()`, or an `IncludeResolver` that only
+loads the files you allow.
+
 Like in libyara, after a source with errors the compiler can't be used any more: create a new
 `YaraCompiler`. To handle errors without exceptions, use the methods that return the number of
 errors:
@@ -270,6 +274,8 @@ uses its own versioned format, which records the compilation inputs (options, ex
 variables, sources and the content of included files) and replays the compilation when loading.
 Loading is deterministic, doesn't need the original include files, and doesn't use Java
 serialization. If the compiler had custom modules registered, pass them to `Rules.load`.
+Since a saved file contains the sources, the content of the included files and the file names
+used when compiling, share it only where those could be shared too.
 
 ### Custom modules
 
@@ -333,9 +339,15 @@ paths found in directories are joined with `\`, and scan lists may have `\r\n` l
   built from the certificates in the signature without trust anchors, which depends on the
   current time when several candidate issuers exist; names, serials and algorithm names follow
   OpenSSL 3's formatting.
-* Rule evaluation uses a tree interpreter instead of libyara's bytecode VM. Conditions nested
-  deeply enough to exhaust the Java thread stack fail with `EXEC_STACK_OVERFLOW`, but the limit
-  isn't the same as libyara's stack size.
+* Rule evaluation uses a tree interpreter instead of libyara's bytecode VM, and rules are
+  parsed by a recursive descent parser instead of Bison. Expressions nested more than 1000
+  levels deep (parentheses, `not`, ...) are a compilation error ("expression nested too
+  deeply"), and so are groups nested more than 1000 levels deep in regular expressions and hex
+  strings ("groups nested too deeply"); libyara fails at a deeper nesting. Input still nested
+  deeply enough to exhaust the Java thread stack, which can happen when compiling in a thread
+  with a small stack, is a compilation error ("rules nested too deeply"). Conditions that
+  exhaust the stack when evaluated, like chains of many thousands of operators such as
+  `a + b + c ...`, fail with `EXEC_STACK_OVERFLOW`. Chains of `and` and `or` have no limit.
 * Some modules have limits that libyara doesn't, so that small crafted files can't make them
   use gigabytes of memory or minutes of CPU. Files within them get the same results:
   * `pe.signatures` has at most 64 signatures, nested at most 8 levels deep.

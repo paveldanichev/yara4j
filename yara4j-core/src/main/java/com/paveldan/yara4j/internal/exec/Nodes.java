@@ -133,55 +133,43 @@ public final class Nodes {
   // ---------------------------------------------------------------------------------------------
   // Boolean operators
 
-  public static final class And extends Node {
-    final Node left;
-    final Node right;
+  /**
+   * A chain of "and" or "or" operators. "a and b and c" is ((a and b) and c), evaluated here as
+   * a loop instead of a deep tree, so that long chains don't overflow the stack.
+   */
+  public static final class Chain extends Node {
+    private final boolean or;
+    private final List<Node> operands = new java.util.ArrayList<>();
 
-    public And(Node left, Node right) {
-      this.left = left;
-      this.right = right;
+    private Chain(boolean or, Node left, Node right) {
+      this.or = or;
+      operands.add(left);
+      operands.add(right);
+    }
+
+    /** "left or right" or "left and right", extending left if it's a chain of the same op. */
+    public static Node of(boolean or, Node left, Node right) {
+      if (left instanceof Chain && ((Chain) left).or == or) {
+        ((Chain) left).operands.add(right);
+        return left;
+      }
+      return new Chain(or, left, right);
     }
 
     @Override
     public long evalLong(ExecContext ctx) {
-      long r1 = left.evalLong(ctx);
-      if (r1 != UNDEFINED && r1 == 0) {
-        return r1;
+      long r1 = operands.get(0).evalLong(ctx);
+      for (int i = 1; i < operands.size(); i++) {
+        // Short-circuit on false for "and", on true for "or".
+        if (r1 != UNDEFINED && (r1 != 0) == or) {
+          return r1;
+        }
+        long r2 = operands.get(i).evalLong(ctx);
+        boolean b1 = r1 != UNDEFINED && r1 != 0;
+        boolean b2 = r2 != UNDEFINED && r2 != 0;
+        r1 = (or ? b1 || b2 : b1 && b2) ? 1 : 0;
       }
-      long r2 = right.evalLong(ctx);
-      if (r1 == UNDEFINED) {
-        r1 = 0;
-      }
-      if (r2 == UNDEFINED) {
-        r2 = 0;
-      }
-      return (r1 != 0 && r2 != 0) ? 1 : 0;
-    }
-  }
-
-  public static final class Or extends Node {
-    final Node left;
-    final Node right;
-
-    public Or(Node left, Node right) {
-      this.left = left;
-      this.right = right;
-    }
-
-    @Override
-    public long evalLong(ExecContext ctx) {
-      long r1 = left.evalLong(ctx);
-      if (r1 != UNDEFINED && r1 != 0) {
-        return r1;
-      }
-      long r2 = right.evalLong(ctx);
-      if (r1 == UNDEFINED) {
-        r1 = 0;
-      }
-      if (r2 == UNDEFINED) {
-        r2 = 0;
-      }
-      return (r1 != 0 || r2 != 0) ? 1 : 0;
+      return r1;
     }
   }
 
@@ -742,16 +730,7 @@ public final class Nodes {
       if (r1 == UNDEFINED) {
         return UNDEFINED;
       }
-      for (Match m = ctx.matches[str.idx].head; m != null; m = m.next) {
-        long off = m.base + m.offset;
-        if (r1 == off) {
-          return 1;
-        }
-        if (r1 < off) {
-          break;
-        }
-      }
-      return 0;
+      return ctx.matches[str.idx].anyIn(r1, r1) ? 1 : 0;
     }
   }
 
@@ -774,16 +753,7 @@ public final class Nodes {
       if (r1 == UNDEFINED || r2 == UNDEFINED) {
         return UNDEFINED;
       }
-      for (Match m = ctx.matches[str.idx].head; m != null; m = m.next) {
-        long off = m.base + m.offset;
-        if (off >= r1 && off <= r2) {
-          return 1;
-        }
-        if (off > r2) {
-          break;
-        }
-      }
-      return 0;
+      return ctx.matches[str.idx].anyIn(r1, r2) ? 1 : 0;
     }
   }
 
@@ -819,17 +789,7 @@ public final class Nodes {
       if (r1 == UNDEFINED || r2 == UNDEFINED) {
         return UNDEFINED;
       }
-      long count = 0;
-      for (Match m = ctx.matches[str.idx].head; m != null; m = m.next) {
-        long off = m.base + m.offset;
-        if (off >= r1 && off <= r2) {
-          count++;
-        }
-        if (off > r2) {
-          break;
-        }
-      }
-      return count;
+      return ctx.matches[str.idx].countIn(r1, r2);
     }
   }
 
@@ -852,14 +812,11 @@ public final class Nodes {
       if (r1 == UNDEFINED) {
         return UNDEFINED;
       }
-      long i = 1;
-      for (Match m = ctx.matches[str.idx].head; m != null; m = m.next) {
-        if (r1 == i) {
-          return length ? m.matchLength : m.base + m.offset;
-        }
-        i++;
+      Match m = ctx.matches[str.idx].get(r1 - 1);
+      if (m == null) {
+        return UNDEFINED;
       }
-      return UNDEFINED;
+      return length ? m.matchLength : m.base + m.offset;
     }
   }
 
@@ -967,15 +924,8 @@ public final class Nodes {
       long found = 0;
       long count = 0;
       for (CompiledString s : strings) {
-        for (Match m = ctx.matches[s.idx].head; m != null; m = m.next) {
-          long off = m.base + m.offset;
-          if (off >= r1 && off <= r2) {
-            found++;
-            break;
-          }
-          if (off > r1) {
-            break;
-          }
+        if (ctx.matches[s.idx].anyIn(r1, r2)) {
+          found++;
         }
         count++;
       }
@@ -1004,15 +954,8 @@ public final class Nodes {
       long found = 0;
       long count = 0;
       for (CompiledString s : strings) {
-        for (Match m = ctx.matches[s.idx].head; m != null; m = m.next) {
-          long off = m.base + m.offset;
-          if (off == r2) {
-            found++;
-            break;
-          }
-          if (off > r2) {
-            break;
-          }
+        if (ctx.matches[s.idx].anyIn(r2, r2)) {
+          found++;
         }
         count++;
       }
