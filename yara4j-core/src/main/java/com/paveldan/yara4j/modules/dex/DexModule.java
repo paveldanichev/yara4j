@@ -10,6 +10,7 @@ import com.paveldan.yara4j.module.YaraModule;
 import com.paveldan.yara4j.object.YObject;
 import com.paveldan.yara4j.object.YStructure;
 import com.paveldan.yara4j.util.BinaryReader;
+import com.paveldan.yara4j.util.CopyCache;
 import com.paveldan.yara4j.util.CStrings;
 
 /** The "dex" module. Port of libyara/modules/dex/dex.c. */
@@ -148,15 +149,25 @@ public final class DexModule implements YaraModule {
   // ---------------------------------------------------------------------------------------------
   // Parsing
 
+  /**
+   * Maximum number of encoded methods and fields. A dex file has at most 65536 method and field
+   * ids, but class definitions can all reference the same class data, so without a limit the
+   * number of entries would grow with the square of the file size.
+   */
+  static final int MAX_ENCODED_ITEMS = 0x80000;
+
   private static final class Dex {
     final BinaryReader r;
     final long size;
     final YObject object;
+    /** Copies of strings and instructions, which several items may reference. */
+    final CopyCache copies;
 
     Dex(BinaryReader r, YObject object) {
       this.r = r;
       this.size = r.size();
       this.object = object;
+      this.copies = CopyCache.forData(r);
     }
 
     /** fits_in_dex: offset and size are treated as unsigned. */
@@ -379,10 +390,10 @@ public final class DexModule implements YaraModule {
       o.setInteger(insnsSize, "method[%i].code_item.insns_size", index);
       long insnsLen = (insnsSize * 2) & 0xFFFFFFFFL;
       if (dex.fits(codeOff + CODE_ITEM_SIZE, insnsLen)) {
-        o.setString(
-            dex.r.bytes(codeOff + CODE_ITEM_SIZE, (int) insnsLen),
-            "method[%i].code_item.insns",
-            index);
+        byte[] insns = dex.copies.bytes(codeOff + CODE_ITEM_SIZE, (int) insnsLen);
+        if (insns != null) {
+          o.setString(insns, "method[%i].code_item.insns", index);
+        }
       }
     }
     return u.size;
@@ -431,7 +442,10 @@ public final class DexModule implements YaraModule {
       }
       o.setInteger(dataOffset, "string_ids[%i].offset", i);
       o.setInteger(value, "string_ids[%i].size", i);
-      o.setString(dex.r.bytes(dataOffset + 1, (int) value), "string_ids[%i].value", i);
+      byte[] string = dex.copies.bytes(dataOffset + 1, (int) value);
+      if (string != null) {
+        o.setString(string, "string_ids[%i].value", i);
+      }
     }
 
     if (!dex.fits(typeIdsOffset, typeIdsSize * 4)) {
@@ -560,7 +574,14 @@ public final class DexModule implements YaraModule {
         o.setInteger(
             virtualMethodsSize, "class_data_item[%i].virtual_methods_size", indexClassDataItem);
         long[] previous = {0};
+        // Set when the limit stops the fields before their end: the offset of the methods that
+        // follow them is then unknown.
+        boolean fieldsCut = false;
         for (long j = 0; j < staticFieldsSize; j++) {
+          if (indexEncodedField == MAX_ENCODED_ITEMS) {
+            fieldsCut = true;
+            break;
+          }
           long n =
               loadEncodedField(
                   dex, classDataOffset + ulebSize, previous, indexEncodedField, 1, 0);
@@ -571,7 +592,11 @@ public final class DexModule implements YaraModule {
           indexEncodedField++;
         }
         previous[0] = 0;
-        for (long j = 0; j < instanceFieldsSize; j++) {
+        for (long j = 0; j < instanceFieldsSize && !fieldsCut; j++) {
+          if (indexEncodedField == MAX_ENCODED_ITEMS) {
+            fieldsCut = true;
+            break;
+          }
           long n =
               loadEncodedField(
                   dex, classDataOffset + ulebSize, previous, indexEncodedField, 0, 1);
@@ -582,7 +607,9 @@ public final class DexModule implements YaraModule {
           indexEncodedField++;
         }
         previous[0] = 0;
-        for (long j = 0; j < directMethodsSize; j++) {
+        for (long j = 0;
+            j < directMethodsSize && !fieldsCut && indexEncodedMethod < MAX_ENCODED_ITEMS;
+            j++) {
           long n =
               loadEncodedMethod(
                   dex, classDataOffset + ulebSize, previous, indexEncodedMethod, 1, 0);
@@ -593,7 +620,9 @@ public final class DexModule implements YaraModule {
           indexEncodedMethod++;
         }
         previous[0] = 0;
-        for (long j = 0; j < virtualMethodsSize; j++) {
+        for (long j = 0;
+            j < virtualMethodsSize && !fieldsCut && indexEncodedMethod < MAX_ENCODED_ITEMS;
+            j++) {
           long n =
               loadEncodedMethod(
                   dex, classDataOffset + ulebSize, previous, indexEncodedMethod, 0, 1);
@@ -754,7 +783,7 @@ public final class DexModule implements YaraModule {
       module.setInteger((Long) c[1], (String) c[0]);
     }
     for (MemoryBlock block : context.blocks()) {
-      BinaryReader r = new BinaryReader(block.data());
+      BinaryReader r = new BinaryReader(block.data(), context);
       if (r.size() < HEADER_SIZE) {
         continue;
       }

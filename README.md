@@ -336,6 +336,17 @@ paths found in directories are joined with `\`, and scan lists may have `\r\n` l
 * Rule evaluation uses a tree interpreter instead of libyara's bytecode VM. Conditions nested
   deeply enough to exhaust the Java thread stack fail with `EXEC_STACK_OVERFLOW`, but the limit
   isn't the same as libyara's stack size.
+* Some modules have limits that libyara doesn't, so that small crafted files can't make them
+  use gigabytes of memory or minutes of CPU. Files within them get the same results:
+  * `pe.signatures` has at most 64 signatures, nested at most 8 levels deep.
+  * `dex` has at most 524288 entries in `field` and in `method`. When the limit stops the
+    fields of a class, its methods are skipped too, since they follow the fields.
+  * `elf.telfhash()` and `elf.import_md5()` are undefined when the symbol names they join are
+    longer than 4 times the file size plus 1 MiB.
+  * In `dex` and `elf`, strings and instructions that many entries reference are copied once,
+    and the copies are limited to 4 times the file size plus 1 MiB in total; values past the
+    limit are undefined, and so are `elf.telfhash()` and `elf.import_md5()` when an ELF
+    reaches it.
 
 ## License
 

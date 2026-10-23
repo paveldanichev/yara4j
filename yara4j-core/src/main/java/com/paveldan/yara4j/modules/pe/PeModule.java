@@ -201,6 +201,11 @@ public final class PeModule implements YaraModule {
       return is64 ? r.u64(optionalHeader + off64) : u32(optionalHeader + off32);
     }
 
+    /** See {@link BinaryReader#tick}. */
+    public void tick() {
+      r.tick();
+    }
+
     /** pe_get_directory_entry: offset of the data directory entry or -1. */
     public long directoryEntry(int entry) {
       long result = dataDirectories() + (long) entry * SIZEOF_DATA_DIRECTORY;
@@ -2076,7 +2081,7 @@ public final class PeModule implements YaraModule {
     }
     module.setInteger(0, "is_pe");
     for (MemoryBlock block : context.blocks()) {
-      BinaryReader r = new BinaryReader(block.data());
+      BinaryReader r = new BinaryReader(block.data(), context);
       long header = getHeader(r);
       if (header < 0) {
         continue;

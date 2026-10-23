@@ -2,7 +2,9 @@ package com.paveldan.yara4j.modules.dotnet;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import com.paveldan.yara4j.module.MemoryBlock;
 import com.paveldan.yara4j.module.ModuleDeclarations;
 import com.paveldan.yara4j.module.ScanContext;
@@ -329,6 +331,63 @@ public final class DotnetModule implements YaraModule {
     long strSize;
     long blobHeap;
     long blobSize;
+    /** Built on first use by {@link #owners}. */
+    Owners owners;
+  }
+
+  /**
+   * The rows of the GenericParam, InterfaceImpl and NestedClass tables by owner. libyara scans
+   * the whole table for each type and method, which takes time quadratic in the number of rows.
+   */
+  private static final class Owners {
+    /** Name indexes of the generic params by owner (a coded index), in table order. */
+    final Map<Long, List<Long>> genericParams = new HashMap<>();
+    /** True if the table has a NULL row: parse_generic_params then finds no params at all. */
+    boolean genericParamsNullRow;
+    /** Interfaces of each class, in table order. */
+    final Map<Long, List<Long>> interfaces = new HashMap<>();
+    /** The enclosing class in the first row of each nested class. */
+    final Map<Long, Long> enclosing = new HashMap<>();
+  }
+
+  /**
+   * Indexes the tables in one pass each. Rows that don't fit are skipped like in libyara, which
+   * skips all the following rows too, since their offsets increase.
+   */
+  private static Owners owners(Ctx ctx) {
+    if (ctx.owners != null) {
+      return ctx.owners;
+    }
+    Owners o = new Owners();
+    for (long idx = 1; idx <= ctx.tables.genericparam.rowCount; ++idx) {
+      long data = ctx.tables.genericparam.row(idx);
+      if (data == NULL) {
+        o.genericParamsNullRow = true;
+        break;
+      }
+      long[] row = readGenericparam(ctx, data);
+      if (row == null) {
+        break;
+      }
+      o.genericParams.computeIfAbsent(row[0], k -> new ArrayList<>()).add(row[1]);
+    }
+    for (long idx = 1; idx <= ctx.tables.interfaceimpl.rowCount; ++idx) {
+      long data = ctx.tables.interfaceimpl.row(idx);
+      long[] row = data == NULL ? null : readInterfaceimpl(ctx, data);
+      if (row == null) {
+        break;
+      }
+      o.interfaces.computeIfAbsent(row[0], k -> new ArrayList<>()).add(row[1]);
+    }
+    for (long idx = 1; idx <= ctx.tables.nestedclass.rowCount; ++idx) {
+      long[] row = readNestedclass(ctx, ctx.tables.nestedclass.row(idx));
+      if (row == null) {
+        break;
+      }
+      o.enclosing.putIfAbsent(row[0], row[1]);
+    }
+    ctx.owners = o;
+    return o;
   }
 
   private static long maxRows(long... rows) {
@@ -886,20 +945,10 @@ public final class DotnetModule implements YaraModule {
     if (parent != null) {
       o.setString(parent, "classes[%i].base_types[%i]", outIdx, baseTypeIdx++);
     }
-    for (long idx = 0; idx < ctx.tables.interfaceimpl.rowCount; ++idx) {
-      long data = ctx.tables.interfaceimpl.row(idx + 1);
-      if (data == NULL) {
-        break;
-      }
-      long[] row = readInterfaceimpl(ctx, data);
-      if (row == null) {
-        continue;
-      }
-      if (row[0] == typeIdx) {
-        String itf = getTypeDefOrRefFullname(ctx, row[1], classGenParams, null, 0);
-        if (itf != null) {
-          o.setString(itf, "classes[%i].base_types[%i]", outIdx, baseTypeIdx++);
-        }
+    for (long itfIdx : owners(ctx).interfaces.getOrDefault(typeIdx, List.of())) {
+      String itf = getTypeDefOrRefFullname(ctx, itfIdx, classGenParams, null, 0);
+      if (itf != null) {
+        o.setString(itf, "classes[%i].base_types[%i]", outIdx, baseTypeIdx++);
       }
     }
     o.setInteger(baseTypeIdx, "classes[%i].number_of_base_types", outIdx);
@@ -949,23 +998,18 @@ public final class DotnetModule implements YaraModule {
 
   private static List<String> parseGenericParams(Ctx ctx, boolean method, long genIdx) {
     List<String> result = new ArrayList<>();
-    for (long idx = 0; idx < ctx.tables.genericparam.rowCount; ++idx) {
-      long data = ctx.tables.genericparam.row(idx + 1);
-      if (data == NULL) {
+    Owners owners = owners(ctx);
+    if (owners.genericParamsNullRow) {
+      return result;
+    }
+    // The owner is a TypeOrMethodDef coded index: the table in bit 0, 1 for MethodDef.
+    for (long nameIdx :
+        owners.genericParams.getOrDefault(genIdx << 1 | (method ? 1 : 0), List.of())) {
+      String name = ctx.d.dotnetString(ctx.strHeap, ctx.strSize, nameIdx);
+      if (name == null || name.isEmpty()) {
         return new ArrayList<>();
       }
-      long[] row = readGenericparam(ctx, data);
-      if (row == null) {
-        continue;
-      }
-      long table = row[0] & 0x1;
-      if (table == (method ? 1 : 0) && (row[0] >>> 1) == genIdx) {
-        String name = ctx.d.dotnetString(ctx.strHeap, ctx.strSize, row[1]);
-        if (name == null || name.isEmpty()) {
-          return new ArrayList<>();
-        }
-        result.add(name);
-      }
+      result.add(name);
     }
     return result;
   }
@@ -978,6 +1022,7 @@ public final class DotnetModule implements YaraModule {
     YStructure o = ctx.d.object;
     int outIdx = 0;
     for (long idx = 0; idx < methodCount; ++idx) {
+      ctx.d.pe.tick();
       long data = ctx.tables.methoddef.row(methodlist + idx);
       if (data == NULL) {
         break;
@@ -1049,38 +1094,32 @@ public final class DotnetModule implements YaraModule {
     if (depth > MAX_NAMESPACE_DEPTH) {
       return null;
     }
-    for (long idx = 0; idx < ctx.tables.nestedclass.rowCount; ++idx) {
-      long nestedData = ctx.tables.nestedclass.row(idx + 1);
-      long[] nestedRow = readNestedclass(ctx, nestedData);
-      if (nestedRow == null) {
-        continue;
-      }
-      if (nestedRow[0] == nestedIdx) {
-        long typedefData = ctx.tables.typedef.row(nestedRow[1]);
-        TypedefRow typedefRow = readTypedef(ctx, typedefData);
-        if (typedefRow == null) {
-          break;
-        }
-        String name = ctx.d.dotnetString(ctx.strHeap, ctx.strSize, typedefRow.name);
-        if (name != null && name.equals("<Module>")) {
-          break;
-        }
-        String namespace = ctx.d.dotnetString(ctx.strHeap, ctx.strSize, typedefRow.namespace);
-        if (isNested(typedefRow.flags) && nestedRow[1] != nestedRow[0]) {
-          String nestedNamespace = parseEnclosingTypes(ctx, nestedRow[1], depth + 1);
-          String tmp = createFullName(namespace, nestedNamespace);
-          return createFullName(name, tmp);
-        }
-        return createFullName(name, namespace);
-      }
+    Long enclosing = owners(ctx).enclosing.get(nestedIdx);
+    if (enclosing == null) {
+      return null;
     }
-    return null;
+    TypedefRow typedefRow = readTypedef(ctx, ctx.tables.typedef.row(enclosing));
+    if (typedefRow == null) {
+      return null;
+    }
+    String name = ctx.d.dotnetString(ctx.strHeap, ctx.strSize, typedefRow.name);
+    if (name != null && name.equals("<Module>")) {
+      return null;
+    }
+    String namespace = ctx.d.dotnetString(ctx.strHeap, ctx.strSize, typedefRow.namespace);
+    if (isNested(typedefRow.flags) && enclosing != nestedIdx) {
+      String nestedNamespace = parseEnclosingTypes(ctx, enclosing, depth + 1);
+      String tmp = createFullName(namespace, nestedNamespace);
+      return createFullName(name, tmp);
+    }
+    return createFullName(name, namespace);
   }
 
   private static void parseUserTypes(Ctx ctx) {
     YStructure o = ctx.d.object;
     int outIdx = 0;
     for (long idx = 0; idx < ctx.tables.typedef.rowCount; ++idx) {
+      ctx.d.pe.tick();
       long data = ctx.tables.typedef.row(idx + 1);
       TypedefRow row = readTypedef(ctx, data);
       if (row == null) {
@@ -1357,6 +1396,7 @@ public final class DotnetModule implements YaraModule {
             rowSize = 1 + 1 + indexSize + indexSizes.blob;
             long rowPtr = tableOffset;
             for (long i = 0; i < numRows; i++) {
+              d.pe.tick();
               if (!d.fits(rowPtr, rowSize)) {
                 break;
               }
@@ -1458,6 +1498,7 @@ public final class DotnetModule implements YaraModule {
             long rowPtr = tableOffset;
             int counter = 0;
             for (long i = 0; i < numRows; i++) {
+              d.pe.tick();
               if (!d.fits(rowPtr, SIZEOF_MODULEREF_TABLE)) {
                 break;
               }
@@ -1491,6 +1532,7 @@ public final class DotnetModule implements YaraModule {
             long rowPtr = tableOffset;
             int counter = 0;
             for (long i = 0; i < numRows; i++) {
+              d.pe.tick();
               if (!d.fits(rowPtr, SIZEOF_FIELDRVA_TABLE)) {
                 break;
               }
@@ -1672,6 +1714,7 @@ public final class DotnetModule implements YaraModule {
       IndexSizes indexSizes, long stringOffset, long strHeapSize, long blobBase) {
     long rowPtr = tableOffset;
     for (long i = 0; i < numRows; i++) {
+      d.pe.tick();
       if (!d.fits(rowPtr, rowSize)) {
         break;
       }
@@ -2143,7 +2186,9 @@ public final class DotnetModule implements YaraModule {
   @Override
   public void load(ScanContext context, YStructure module, byte[] moduleData) {
     for (MemoryBlock block : context.blocks()) {
-      BinaryReader r = new BinaryReader(block.data());
+      // Reads outside the file return 0 without reading, and table rows that don't fit are
+      // skipped, so loops over rows check the timeout themselves.
+      BinaryReader r = new BinaryReader(block.data(), context);
       long header = PeModule.getHeader(r);
       if (header < 0) {
         continue;

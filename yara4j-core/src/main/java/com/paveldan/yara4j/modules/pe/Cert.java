@@ -6,7 +6,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import org.bouncycastle.asn1.ASN1Encodable;
+import org.bouncycastle.asn1.ASN1Sequence;
+import org.bouncycastle.asn1.pkcs.RSAPublicKey;
+import org.bouncycastle.asn1.x509.DSAParameter;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.params.RSAKeyParameters;
 import org.bouncycastle.crypto.util.PublicKeyFactory;
 import com.paveldan.yara4j.modules.pe.Asn1.Asn1Exception;
 
@@ -408,12 +415,52 @@ final class Cert {
     if (!publicKeyDecoded) {
       publicKeyDecoded = true;
       try {
-        publicKey = PublicKeyFactory.createKey(spki);
+        publicKey = decodePublicKey(SubjectPublicKeyInfo.getInstance(spki));
       } catch (Exception | LinkageError e) {
         publicKey = null;
       }
     }
     return publicKey;
+  }
+
+  /** The RSA and DSA key algorithms that PublicKeyFactory decodes. */
+  private static final Set<String> RSA_KEY_OIDS =
+      Set.of("1.2.840.113549.1.1.1", "1.2.840.113549.1.1.7", Oids.RSASSA_PSS, "2.5.8.1.1");
+
+  private static final Set<String> DSA_KEY_OIDS = Set.of(Oids.DSA, "1.3.14.3.2.27");
+
+  /**
+   * A key that decodes, so that it can be used for building chains, but that OpenSSL refuses
+   * to verify signatures with. Signature verification fails with it.
+   */
+  static final class UnverifiableKey extends AsymmetricKeyParameter {
+    UnverifiableKey() {
+      super(false);
+    }
+  }
+
+  private static AsymmetricKeyParameter decodePublicKey(SubjectPublicKeyInfo info)
+      throws java.io.IOException {
+    String alg = info.getAlgorithm().getAlgorithm().getId();
+    if (RSA_KEY_OIDS.contains(alg)) {
+      // Like OpenSSL, the modulus isn't validated when decoding the key. PublicKeyFactory runs
+      // primality tests on it, which take seconds with the large moduli a file can contain.
+      // The limits OpenSSL applies when verifying are checked by Authenticode.rsaRecover.
+      RSAPublicKey k = RSAPublicKey.getInstance(info.parsePublicKey());
+      return new RSAKeyParameters(false, k.getModulus(), k.getPublicExponent(), true);
+    }
+    if (DSA_KEY_OIDS.contains(alg)) {
+      // PublicKeyFactory checks y^q mod p == 1, which is slow when q and p are large; OpenSSL
+      // can't verify with such keys anyway.
+      ASN1Encodable params = info.getAlgorithm().getParameters();
+      if (params instanceof ASN1Sequence) {
+        DSAParameter p = DSAParameter.getInstance(params);
+        if (!Authenticode.dsaVerifiable(p.getP(), p.getQ())) {
+          return new UnverifiableKey();
+        }
+      }
+    }
+    return PublicKeyFactory.createKey(info);
   }
 
   /** integer_to_serial: "00:01:02..." or null. */
