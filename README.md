@@ -357,10 +357,11 @@ paths found in directories are joined with `\`, and scan lists may have `\r\n` l
     since they follow the fields.
   * `elf.telfhash()` and `elf.import_md5()` are undefined when the symbol names they join are
     longer than 4 times the file size plus 1 MiB.
-  * In `dex` and `elf`, strings and instructions that many entries reference are copied once,
-    and the copies are limited to 4 times the file size plus 1 MiB in total; values past the
-    limit are undefined, and so are `elf.telfhash()` and `elf.import_md5()` when an ELF
-    reaches it.
+  * In `dex` and `elf`, strings and instructions longer than 256 bytes that many entries
+    reference are copied once, and their copies are limited to 4 times the file size plus
+    1 MiB in total; values past the limit are undefined, and so are `elf.telfhash()` and
+    `elf.import_md5()` when an ELF reaches it. Values of up to 256 bytes are copied for each
+    entry, outside the limit, so it never leaves them undefined.
 
 ## License
 
