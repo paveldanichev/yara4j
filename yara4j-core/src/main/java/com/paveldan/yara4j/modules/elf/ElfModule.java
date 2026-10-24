@@ -4,7 +4,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import com.paveldan.yara4j.module.FunctionCall;
 import com.paveldan.yara4j.module.MemoryBlock;
 import com.paveldan.yara4j.module.ModuleDeclarations;
@@ -13,6 +15,7 @@ import com.paveldan.yara4j.module.YaraModule;
 import com.paveldan.yara4j.object.YObject;
 import com.paveldan.yara4j.object.YStructure;
 import com.paveldan.yara4j.util.BinaryReader;
+import com.paveldan.yara4j.util.CopyCache;
 import com.paveldan.yara4j.util.Tlsh;
 
 /** The "elf" module. Port of libyara/modules/elf/elf.c. */
@@ -46,6 +49,24 @@ public final class ElfModule implements YaraModule {
     List<Symbol> dynsym;
     String telfhash;
     String importHash;
+    /**
+     * True once telfhash or importHash was computed, also when undefined, so that functions
+     * called in loops don't join the names again.
+     */
+    boolean telfhashDone;
+
+    boolean importHashDone;
+    /**
+     * Limit on the length of the symbol names joined by telfhash and import_md5, above which
+     * they are undefined. Names are shared between symbols, so without a limit the joined names
+     * of a small file could take gigabytes.
+     */
+    long maxJoinedLength;
+    /**
+     * True if names were left undefined because their copies exceeded the limit, in which case
+     * telfhash and importHash would be computed from part of the symbols, and are undefined.
+     */
+    boolean namesIncomplete;
   }
 
   @Override
@@ -62,12 +83,17 @@ public final class ElfModule implements YaraModule {
     final boolean is64;
     final boolean be;
     final long size;
+    /** Copies of names: all the symbols can reference the same long string. */
+    final CopyCache copies;
+    /** The symbol names decoded for each name copy longer than CopyCache.MAX_UNSHARED_LENGTH. */
+    final Map<byte[], String> names = new IdentityHashMap<>();
 
     Elf(BinaryReader r, boolean is64, boolean be) {
       this.r = r;
       this.is64 = is64;
       this.be = be;
       this.size = r.size();
+      this.copies = CopyCache.forData(r);
     }
 
     int u16(long off) {
@@ -247,7 +273,8 @@ public final class ElfModule implements YaraModule {
   }
 
   /** str_table_entry: returns the string or null. limit is the end offset of the table. */
-  private static byte[] strTableEntry(BinaryReader r, long base, long limit, long index) {
+  private static byte[] strTableEntry(Elf e, long base, long limit, long index) {
+    BinaryReader r = e.r;
     if (base < 0 || base >= limit) {
       return null;
     }
@@ -267,11 +294,11 @@ public final class ElfModule implements YaraModule {
     }
     long entry = base + idx;
     long max = Math.min(limit, r.size()) - entry;
-    int len = r.strnlen(entry, max);
+    int len = e.copies.strnlen(entry, max);
     if (len < 0 || entry + len == limit || entry + len >= r.size()) {
       return null;
     }
-    return r.bytes(entry, len);
+    return e.copies.bytes(entry, len);
   }
 
   private static long rvaToOffset(Elf e, long rva) {
@@ -333,10 +360,13 @@ public final class ElfModule implements YaraModule {
     int j;
     for (j = 0; j < count; j++, sym += e.symSize()) {
       Symbol s = new Symbol();
-      byte[] name = strTableEntry(e.r, strTable, strTable + strTableSize, e.symName(sym));
+      byte[] name = strTableEntry(e, strTable, strTable + strTableSize, e.symName(sym));
       if (name != null) {
         obj.setString(name, array + "[%i].name", j);
-        s.name = new String(name, StandardCharsets.ISO_8859_1);
+        s.name =
+            name.length <= CopyCache.MAX_UNSHARED_LENGTH
+                ? new String(name, StandardCharsets.ISO_8859_1)
+                : e.names.computeIfAbsent(name, b -> new String(b, StandardCharsets.ISO_8859_1));
       }
       int info = e.symInfo(sym);
       s.bind = info >> 4;
@@ -399,7 +429,7 @@ public final class ElfModule implements YaraModule {
         obj.setInteger(e.secSize(section), "sections[%i].size", i);
         obj.setInteger(e.secOffset(section), "sections[%i].offset", i);
         if (e.secName(section) < elfSize && strTable > 0) {
-          byte[] name = strTableEntry(e.r, strTable, elfSize, e.secName(section));
+          byte[] name = strTableEntry(e, strTable, elfSize, e.secName(section));
           if (name != null) {
             obj.setString(name, "sections[%i].name", i);
           }
@@ -515,14 +545,16 @@ public final class ElfModule implements YaraModule {
     if (elf == null) {
       return null;
     }
-    if (elf.telfhash != null) {
+    if (elf.telfhashDone) {
       return elf.telfhash;
     }
+    elf.telfhashDone = true;
     List<Symbol> list = elf.dynsym != null ? elf.dynsym : elf.symtab;
-    if (list == null) {
+    if (list == null || elf.namesIncomplete) {
       return null;
     }
     List<String> clean = new ArrayList<>();
+    long joinedLength = 0;
     for (Symbol s : list) {
       String name = s.name;
       if (name == null) {
@@ -547,6 +579,10 @@ public final class ElfModule implements YaraModule {
       if (excluded) {
         continue;
       }
+      joinedLength += name.length() + 1;
+      if (joinedLength > elf.maxJoinedLength) {
+        return null;
+      }
       clean.add(lower(name));
     }
     if (clean.isEmpty()) {
@@ -568,17 +604,23 @@ public final class ElfModule implements YaraModule {
     if (elf == null) {
       return null;
     }
-    if (elf.importHash != null) {
+    if (elf.importHashDone) {
       return elf.importHash;
     }
+    elf.importHashDone = true;
     List<Symbol> list = elf.dynsym != null ? elf.dynsym : elf.symtab;
-    if (list == null) {
+    if (list == null || elf.namesIncomplete) {
       return null;
     }
     List<String> clean = new ArrayList<>();
+    long joinedLength = 0;
     for (Symbol s : list) {
       if (s.name == null || s.shndx != 0 || s.name.isEmpty()) {
         continue;
+      }
+      joinedLength += s.name.length() + 1;
+      if (joinedLength > elf.maxJoinedLength) {
+        return null;
       }
       clean.add(lower(s.name));
     }
@@ -707,7 +749,7 @@ public final class ElfModule implements YaraModule {
     for (MemoryBlock block : context.blocks()) {
       ElfData elf = new ElfData();
       module.setData(elf);
-      BinaryReader r = new BinaryReader(block.data());
+      BinaryReader r = new BinaryReader(block.data(), context);
       if (r.size() < 16 || r.u32(0) != 0x464C457FL) {
         continue;
       }
@@ -730,7 +772,10 @@ public final class ElfModule implements YaraModule {
       } else {
         continue;
       }
-      parseElfHeader(new Elf(r, is64, be), elf, module);
+      elf.maxJoinedLength = CopyCache.budgetFor(r);
+      Elf e = new Elf(r, is64, be);
+      parseElfHeader(e, elf, module);
+      elf.namesIncomplete = e.copies.refused();
       break;
     }
   }

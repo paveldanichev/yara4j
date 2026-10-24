@@ -133,55 +133,67 @@ public final class Nodes {
   // ---------------------------------------------------------------------------------------------
   // Boolean operators
 
-  public static final class And extends Node {
-    final Node left;
-    final Node right;
+  /**
+   * A chain of "and" or "or" operators. "a and b and c" is ((a and b) and c), evaluated here as
+   * a loop instead of a deep tree, so that long chains don't overflow the stack.
+   */
+  public static final class Chain extends Node {
+    private final boolean or;
+    private Node[] operands;
+    private int size;
 
-    public And(Node left, Node right) {
-      this.left = left;
-      this.right = right;
+    private Chain(boolean or, Node left, Node right) {
+      this.or = or;
+      operands = new Node[] {left, right};
+      size = 2;
+    }
+
+    /** "left or right" or "left and right", extending left if it's a chain of the same op. */
+    public static Node of(boolean or, Node left, Node right) {
+      if (left instanceof Chain && ((Chain) left).or == or) {
+        Chain c = (Chain) left;
+        if (c.size == c.operands.length) {
+          c.operands = java.util.Arrays.copyOf(c.operands, 2 * c.size);
+        }
+        c.operands[c.size++] = right;
+        return left;
+      }
+      return new Chain(or, left, right);
     }
 
     @Override
     public long evalLong(ExecContext ctx) {
-      long r1 = left.evalLong(ctx);
-      if (r1 != UNDEFINED && r1 == 0) {
-        return r1;
-      }
-      long r2 = right.evalLong(ctx);
-      if (r1 == UNDEFINED) {
-        r1 = 0;
-      }
-      if (r2 == UNDEFINED) {
-        r2 = 0;
-      }
-      return (r1 != 0 && r2 != 0) ? 1 : 0;
-    }
-  }
-
-  public static final class Or extends Node {
-    final Node left;
-    final Node right;
-
-    public Or(Node left, Node right) {
-      this.left = left;
-      this.right = right;
+      return or ? evalOr(ctx) : evalAnd(ctx);
     }
 
-    @Override
-    public long evalLong(ExecContext ctx) {
-      long r1 = left.evalLong(ctx);
-      if (r1 != UNDEFINED && r1 != 0) {
-        return r1;
+    /** ((r1 and r2) and r3) ... with the results of "and" in libyara. */
+    private long evalAnd(ExecContext ctx) {
+      Node[] ops = operands;
+      long r1 = ops[0].evalLong(ctx);
+      for (int i = 1; i < size; i++) {
+        if (r1 == 0) {
+          return 0;
+        }
+        // r1 is true or undefined, which counts as false once r2 is evaluated.
+        long r2 = ops[i].evalLong(ctx);
+        r1 = r1 != UNDEFINED && r2 != UNDEFINED && r2 != 0 ? 1 : 0;
       }
-      long r2 = right.evalLong(ctx);
-      if (r1 == UNDEFINED) {
-        r1 = 0;
+      return r1;
+    }
+
+    /** ((r1 or r2) or r3) ... with the results of "or" in libyara. */
+    private long evalOr(ExecContext ctx) {
+      Node[] ops = operands;
+      long r1 = ops[0].evalLong(ctx);
+      for (int i = 1; i < size; i++) {
+        if (r1 != UNDEFINED && r1 != 0) {
+          return r1;
+        }
+        // r1 is false or undefined, so the result is r2.
+        long r2 = ops[i].evalLong(ctx);
+        r1 = r2 != UNDEFINED && r2 != 0 ? 1 : 0;
       }
-      if (r2 == UNDEFINED) {
-        r2 = 0;
-      }
-      return (r1 != 0 || r2 != 0) ? 1 : 0;
+      return r1;
     }
   }
 
@@ -742,16 +754,7 @@ public final class Nodes {
       if (r1 == UNDEFINED) {
         return UNDEFINED;
       }
-      for (Match m = ctx.matches[str.idx].head; m != null; m = m.next) {
-        long off = m.base + m.offset;
-        if (r1 == off) {
-          return 1;
-        }
-        if (r1 < off) {
-          break;
-        }
-      }
-      return 0;
+      return ctx.matches[str.idx].anyIn(r1, r1) ? 1 : 0;
     }
   }
 
@@ -774,16 +777,7 @@ public final class Nodes {
       if (r1 == UNDEFINED || r2 == UNDEFINED) {
         return UNDEFINED;
       }
-      for (Match m = ctx.matches[str.idx].head; m != null; m = m.next) {
-        long off = m.base + m.offset;
-        if (off >= r1 && off <= r2) {
-          return 1;
-        }
-        if (off > r2) {
-          break;
-        }
-      }
-      return 0;
+      return ctx.matches[str.idx].anyIn(r1, r2) ? 1 : 0;
     }
   }
 
@@ -819,17 +813,7 @@ public final class Nodes {
       if (r1 == UNDEFINED || r2 == UNDEFINED) {
         return UNDEFINED;
       }
-      long count = 0;
-      for (Match m = ctx.matches[str.idx].head; m != null; m = m.next) {
-        long off = m.base + m.offset;
-        if (off >= r1 && off <= r2) {
-          count++;
-        }
-        if (off > r2) {
-          break;
-        }
-      }
-      return count;
+      return ctx.matches[str.idx].countIn(r1, r2);
     }
   }
 
@@ -852,14 +836,11 @@ public final class Nodes {
       if (r1 == UNDEFINED) {
         return UNDEFINED;
       }
-      long i = 1;
-      for (Match m = ctx.matches[str.idx].head; m != null; m = m.next) {
-        if (r1 == i) {
-          return length ? m.matchLength : m.base + m.offset;
-        }
-        i++;
+      Match m = ctx.matches[str.idx].get(r1 - 1);
+      if (m == null) {
+        return UNDEFINED;
       }
-      return UNDEFINED;
+      return length ? m.matchLength : m.base + m.offset;
     }
   }
 
@@ -967,15 +948,8 @@ public final class Nodes {
       long found = 0;
       long count = 0;
       for (CompiledString s : strings) {
-        for (Match m = ctx.matches[s.idx].head; m != null; m = m.next) {
-          long off = m.base + m.offset;
-          if (off >= r1 && off <= r2) {
-            found++;
-            break;
-          }
-          if (off > r1) {
-            break;
-          }
+        if (ctx.matches[s.idx].anyIn(r1, r2)) {
+          found++;
         }
         count++;
       }
@@ -1004,15 +978,8 @@ public final class Nodes {
       long found = 0;
       long count = 0;
       for (CompiledString s : strings) {
-        for (Match m = ctx.matches[s.idx].head; m != null; m = m.next) {
-          long off = m.base + m.offset;
-          if (off == r2) {
-            found++;
-            break;
-          }
-          if (off > r2) {
-            break;
-          }
+        if (ctx.matches[s.idx].anyIn(r2, r2)) {
+          found++;
         }
         count++;
       }

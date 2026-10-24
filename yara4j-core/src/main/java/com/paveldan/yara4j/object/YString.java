@@ -13,6 +13,10 @@ public final class YString extends YObject {
     return Type.STRING;
   }
 
+  /**
+   * The value, or null if undefined. Modules may share the same array between several values,
+   * so it must not be modified.
+   */
   public byte[] value() {
     return value;
   }

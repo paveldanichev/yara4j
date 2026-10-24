@@ -655,7 +655,7 @@ public final class MachoModule implements YaraModule {
       if (block.size() < 4) {
         continue;
       }
-      BinaryReader r = new BinaryReader(block.data());
+      BinaryReader r = new BinaryReader(block.data(), context);
       long magic = r.u32(0);
       if (isMachoMagic(magic)) {
         parseFile(r, 0, r.size(), module);

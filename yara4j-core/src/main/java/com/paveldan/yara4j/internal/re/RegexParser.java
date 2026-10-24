@@ -63,6 +63,7 @@ public final class RegexParser {
   private final int len;
   private final boolean strictEscape;
   private int pos;
+  private int groupDepth;
   private final ReAst ast = new ReAst();
   private final Result result = new Result();
 
@@ -695,8 +696,13 @@ public final class RegexParser {
     ReNode n;
     switch (tok) {
       case '(':
+        if (groupDepth == Re.MAX_GROUP_NESTING) {
+          error("groups nested too deeply");
+        }
         next();
+        groupDepth++;
         n = alternative();
+        groupDepth--;
         if (tok != ')') {
           syntaxError();
         }

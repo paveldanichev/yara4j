@@ -318,6 +318,41 @@ final class Asn1 {
     return new BigInteger(rawContents());
   }
 
+  /** A range of bytes in a buffer. */
+  static final class Slice {
+    final byte[] buf;
+    final int off;
+    final int len;
+
+    Slice(byte[] buf, int off, int len) {
+      this.buf = buf;
+      this.off = off;
+      this.len = len;
+    }
+  }
+
+  /**
+   * The same bytes as {@link #anyValue}, referencing this element's buffer instead of copying
+   * them when they are contiguous in it.
+   */
+  Slice anyValueSlice() {
+    if (tagClass != UNIVERSAL || tag == SEQUENCE || tag == SET) {
+      return new Slice(buf, start, end - start);
+    }
+    switch (tag) {
+      case NULL:
+      case BOOLEAN:
+      case OBJECT:
+        return null;
+      default:
+        if (!constructed) {
+          return new Slice(buf, contentStart, contentEnd - contentStart);
+        }
+        byte[] c = contents();
+        return new Slice(c, 0, c.length);
+    }
+  }
+
   /**
    * The value of an ASN1_TYPE as seen by OpenSSL's value.sequence / value.octet_string union
    * members, or null when OpenSSL would store something that isn't an ASN1_STRING.

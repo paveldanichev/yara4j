@@ -16,6 +16,8 @@ import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.crypto.params.RSAKeyParameters;
 import org.bouncycastle.crypto.signers.DSASigner;
 import org.bouncycastle.crypto.signers.ECDSASigner;
+import com.paveldan.yara4j.internal.YaraError;
+import com.paveldan.yara4j.module.ScanContext;
 import com.paveldan.yara4j.modules.hash.HashModule;
 import com.paveldan.yara4j.modules.pe.Asn1.Asn1Exception;
 import com.paveldan.yara4j.modules.pe.PeModule.Pe;
@@ -55,6 +57,35 @@ final class Authenticode {
   static final int CS_VFY_TIME_MISSING = 9;
 
   private static final int MAX_NESTED_COUNT = 16;
+
+  /**
+   * Limits on nested signatures, which authenticode-parser doesn't have. Without them a small
+   * file can contain thousands of signatures nested in each other, each one making the
+   * recursion deeper and the file digest computed once more. Real files have a few.
+   */
+  static final int MAX_SIGNATURES = 64;
+
+  static final int MAX_NESTING_DEPTH = 8;
+
+  /** State shared by the parsing of all the signatures of a file. */
+  static final class Budget {
+    final ScanContext context;
+    int signatures;
+
+    Budget(ScanContext context) {
+      this.context = context;
+    }
+
+    void checkTimeout() {
+      if (context != null) {
+        context.checkTimeout();
+      }
+    }
+
+    boolean canParseNested(int depth) {
+      return depth < MAX_NESTING_DEPTH && signatures < MAX_SIGNATURES;
+    }
+  }
 
   /** timegm() of a zeroed struct tm, returned by ASN1_TIME_to_int64_t on parse errors. */
   static final long ZERO_TM = -2209161600L;
@@ -597,9 +628,40 @@ final class Authenticode {
   // ---------------------------------------------------------------------------------------------
   // Signature verification
 
+  // Limits of OpenSSL's RSA and DSA verification (OPENSSL_RSA_MAX_MODULUS_BITS,
+  // OPENSSL_RSA_SMALL_MODULUS_BITS, OPENSSL_RSA_MAX_PUBEXP_BITS, OPENSSL_DSA_MAX_MODULUS_BITS).
+  // Besides matching OpenSSL's results, they bound the cost of the modular exponentiations.
+  static final int RSA_MAX_MODULUS_BITS = 16384;
+  static final int RSA_SMALL_MODULUS_BITS = 3072;
+  static final int RSA_MAX_PUBEXP_BITS = 64;
+  static final int DSA_MAX_MODULUS_BITS = 10000;
+
+  /** The checks of rsa_ossl_public_decrypt on the key. */
+  static boolean rsaVerifiable(BigInteger n, BigInteger e) {
+    int bits = n.bitLength();
+    if (bits > RSA_MAX_MODULUS_BITS) {
+      return false;
+    }
+    if (n.abs().compareTo(e.abs()) <= 0) {
+      return false;
+    }
+    return bits <= RSA_SMALL_MODULUS_BITS || e.bitLength() <= RSA_MAX_PUBEXP_BITS;
+  }
+
+  /** The checks of dsa_do_verify on the key parameters. */
+  static boolean dsaVerifiable(BigInteger p, BigInteger q) {
+    int qbits = q.bitLength();
+    return (qbits == 160 || qbits == 224 || qbits == 256)
+        && p.bitLength() <= DSA_MAX_MODULUS_BITS;
+  }
+
   /** RSA_public_decrypt with PKCS#1 type 1 padding, or null on failure. */
   private static byte[] rsaRecover(AsymmetricKeyParameter key, byte[] sig) {
     if (!(key instanceof RSAKeyParameters)) {
+      return null;
+    }
+    RSAKeyParameters rsa = (RSAKeyParameters) key;
+    if (!rsaVerifiable(rsa.getModulus(), rsa.getExponent())) {
       return null;
     }
     try {
@@ -1130,17 +1192,23 @@ final class Authenticode {
     }
   }
 
-  /** authenticode_new(). */
-  static List<Signature> authenticodeNew(byte[] data) {
-    if (data == null || data.length == 0) {
+  /**
+   * authenticode_new() on the len bytes at off in buf.
+   *
+   * @param depth nesting level of the signature, 0 for the top level one.
+   */
+  static List<Signature> authenticodeNew(byte[] buf, int off, int len, Budget budget, int depth) {
+    if (buf == null || len == 0) {
       return null;
     }
+    budget.checkTimeout();
+    budget.signatures++;
     List<Signature> result = new ArrayList<>();
     Signature auth = new Signature();
     result.add(auth);
     ContentInfo p7;
     try {
-      p7 = parseContentInfo(Asn1.parse(data, 0, data.length), false);
+      p7 = parseContentInfo(Asn1.parse(buf, off, off + len), false);
     } catch (Asn1Exception e) {
       auth.verifyFlags = VFY_CANT_PARSE;
       return result;
@@ -1210,9 +1278,9 @@ final class Authenticode {
     SignerInfo si = sd.signerInfos.get(0);
     auth.countersigs = new ArrayList<>();
 
-    parseNested(si, result);
-    parsePkcs9Countersigs(sd, si, auth);
-    parseMsCountersigs(si, auth);
+    parseNested(si, result, budget, depth);
+    parsePkcs9Countersigs(sd, si, auth, budget);
+    parseMsCountersigs(si, auth, budget);
 
     List<Cert> signers = pkcs7Signers(sd);
     Cert signCert = signers == null || signers.isEmpty() ? null : signers.get(0);
@@ -1248,21 +1316,28 @@ final class Authenticode {
     return a.values.subList(0, Math.min(a.values.size(), MAX_NESTED_COUNT));
   }
 
-  private static void parseNested(SignerInfo si, List<Signature> result) {
+  private static void parseNested(
+      SignerInfo si, List<Signature> result, Budget budget, int depth) {
     for (Asn1 nested : limitedValues(si.unauthAttrs, Oids.SPC_NESTED_SIGNATURE)) {
-      byte[] data = nested.anyValue();
+      if (!budget.canParseNested(depth)) {
+        break;
+      }
+      // Parsed in place: a copy at every level would use memory quadratic in the depth.
+      Asn1.Slice data = nested.anyValueSlice();
       if (data == null) {
         break;
       }
-      List<Signature> auth = authenticodeNew(data);
+      List<Signature> auth = authenticodeNew(data.buf, data.off, data.len, budget, depth + 1);
       if (auth != null) {
         result.addAll(auth);
       }
     }
   }
 
-  private static void parsePkcs9Countersigs(SignedData sd, SignerInfo si, Signature auth) {
+  private static void parsePkcs9Countersigs(
+      SignedData sd, SignerInfo si, Signature auth, Budget budget) {
     for (Asn1 nested : limitedValues(si.unauthAttrs, Oids.COUNTERSIGNATURE)) {
+      budget.checkTimeout();
       byte[] data = nested.anyValue();
       if (data == null) {
         break;
@@ -1271,8 +1346,9 @@ final class Authenticode {
     }
   }
 
-  private static void parseMsCountersigs(SignerInfo si, Signature auth) {
+  private static void parseMsCountersigs(SignerInfo si, Signature auth, Budget budget) {
     for (Asn1 nested : limitedValues(si.unauthAttrs, Oids.SPC_MS_COUNTERSIGNATURE)) {
+      budget.checkTimeout();
       byte[] data = nested.anyValue();
       if (data == null) {
         break;
@@ -1349,8 +1425,12 @@ final class Authenticode {
         | (b.get(i + 3) & 0xFFL) << 24;
   }
 
-  /** parse_authenticode(). */
-  static List<Signature> parseAuthenticode(ByteBuffer data, long peLen) {
+  /**
+   * parse_authenticode().
+   *
+   * @param context the scan, for checking its timeout, or null.
+   */
+  static List<Signature> parseAuthenticode(ByteBuffer data, long peLen, ScanContext context) {
     if (peLen < 0x40) {
       return null;
     }
@@ -1385,10 +1465,14 @@ final class Authenticode {
     for (int i = 0; i < len; i++) {
       blob[i] = data.get((int) (certAddr + 8 + i));
     }
-    List<Signature> sigs = authenticodeNew(blob);
+    Budget budget = new Budget(context);
+    List<Signature> sigs = authenticodeNew(blob, 0, blob.length, budget, 0);
     if (sigs == null) {
       return null;
     }
+    // authenticode-parser hashes the file for every signature, but the digest only depends on
+    // the algorithm.
+    java.util.Map<String, byte[]> fileDigests = new java.util.HashMap<>();
     for (Signature sig : sigs) {
       Oids.Md md = sig.digestAlg == null ? null : Oids.md(oidForLongName(sig));
       if (md == null || sig.digest == null) {
@@ -1397,7 +1481,12 @@ final class Authenticode {
         }
         continue;
       }
-      byte[] fd = fileDigest(md, data, peOffset, is64, certAddr);
+      budget.checkTimeout();
+      byte[] fd = fileDigests.get(md.oid);
+      if (fd == null) {
+        fd = fileDigest(md, data, peOffset, is64, certAddr);
+        fileDigests.put(md.oid, fd);
+      }
       if (fd == null) {
         if (sig.verifyFlags == VFY_VALID) {
           sig.verifyFlags = VFY_INTERNAL_ERROR;
@@ -1554,7 +1643,9 @@ final class Authenticode {
     }
     List<Signature> sigs;
     try {
-      sigs = parseAuthenticode(pe.r.buffer(), pe.size);
+      sigs = parseAuthenticode(pe.r.buffer(), pe.size, pe.r.context());
+    } catch (YaraError e) {
+      throw e; // The scan timed out.
     } catch (RuntimeException e) {
       sigs = null;
     }
