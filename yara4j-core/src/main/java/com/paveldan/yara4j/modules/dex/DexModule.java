@@ -150,11 +150,14 @@ public final class DexModule implements YaraModule {
   // Parsing
 
   /**
-   * Maximum number of encoded methods and fields. A dex file has at most 65536 method and field
-   * ids, but class definitions can all reference the same class data, so without a limit the
-   * number of entries would grow with the square of the file size.
+   * Minimum limit on the number of encoded fields and on the number of encoded methods, which
+   * are otherwise limited to the number of field and method ids. A class defines each of its
+   * fields and methods once, so a valid dex file has no more encoded items than ids, and at
+   * most 65536 ids since instructions reference them with 16 bits. Class definitions can all
+   * reference the same class data, so without a limit the number of entries, each taking about
+   * a kilobyte, would grow with the square of the file size.
    */
-  static final int MAX_ENCODED_ITEMS = 0x80000;
+  static final int MIN_ENCODED_ITEMS_LIMIT = 0x10000;
 
   private static final class Dex {
     final BinaryReader r;
@@ -519,6 +522,8 @@ public final class DexModule implements YaraModule {
     int indexClassDataItem = 0;
     int indexEncodedMethod = 0;
     int indexEncodedField = 0;
+    long maxEncodedFields = Math.max(fieldIdsSize, MIN_ENCODED_ITEMS_LIMIT);
+    long maxEncodedMethods = Math.max(methodIdsSize, MIN_ENCODED_ITEMS_LIMIT);
     {
       if (!dex.fits(classDefsOffset, classDefsSize * 32)) {
         return;
@@ -578,7 +583,7 @@ public final class DexModule implements YaraModule {
         // follow them is then unknown.
         boolean fieldsCut = false;
         for (long j = 0; j < staticFieldsSize; j++) {
-          if (indexEncodedField == MAX_ENCODED_ITEMS) {
+          if (indexEncodedField == maxEncodedFields) {
             fieldsCut = true;
             break;
           }
@@ -593,7 +598,7 @@ public final class DexModule implements YaraModule {
         }
         previous[0] = 0;
         for (long j = 0; j < instanceFieldsSize && !fieldsCut; j++) {
-          if (indexEncodedField == MAX_ENCODED_ITEMS) {
+          if (indexEncodedField == maxEncodedFields) {
             fieldsCut = true;
             break;
           }
@@ -608,7 +613,7 @@ public final class DexModule implements YaraModule {
         }
         previous[0] = 0;
         for (long j = 0;
-            j < directMethodsSize && !fieldsCut && indexEncodedMethod < MAX_ENCODED_ITEMS;
+            j < directMethodsSize && !fieldsCut && indexEncodedMethod < maxEncodedMethods;
             j++) {
           long n =
               loadEncodedMethod(
@@ -621,7 +626,7 @@ public final class DexModule implements YaraModule {
         }
         previous[0] = 0;
         for (long j = 0;
-            j < virtualMethodsSize && !fieldsCut && indexEncodedMethod < MAX_ENCODED_ITEMS;
+            j < virtualMethodsSize && !fieldsCut && indexEncodedMethod < maxEncodedMethods;
             j++) {
           long n =
               loadEncodedMethod(

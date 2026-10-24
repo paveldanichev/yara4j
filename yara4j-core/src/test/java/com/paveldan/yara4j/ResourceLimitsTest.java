@@ -55,10 +55,11 @@ class ResourceLimitsTest {
   @Test
   void dexMethodsSharingCodeItem() throws Exception {
     // A million methods whose instructions are the whole 4 MB file: each method used to get
-    // its own copy of them.
+    // its own copy of them. The file has a single method id, so only the first 65536 methods
+    // are parsed.
     int size = 4 << 20;
     byte[] dex = CraftedFiles.dexWithSharedCodeItem(size);
-    int max = 0x80000;
+    int max = 0x10000;
     long insnsSize = (size - 0x88 - 16) / 2;
     assertEquals(
         List.of("r"),
@@ -92,9 +93,9 @@ class ResourceLimitsTest {
 
   @Test
   void dexFieldsOverTheLimit() throws Exception {
-    // The fields of the first class go past the limit, so its methods can't be found; the
-    // method of the second class is still parsed.
-    int max = 0x80000;
+    // The fields of the first class go past the limit (the file has a single field id), so its
+    // methods can't be found; the method of the second class is still parsed.
+    int max = 0x10000;
     byte[] dex = CraftedFiles.dexWithFieldsThenMethod(max + 1, 7, 9);
     assertEquals(
         List.of("r"),

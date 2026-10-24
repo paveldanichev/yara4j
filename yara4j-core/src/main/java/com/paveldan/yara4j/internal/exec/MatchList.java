@@ -2,12 +2,18 @@ package com.paveldan.yara4j.internal.exec;
 
 /** A list of matches sorted by offset (libyara's YR_MATCHES). */
 public final class MatchList {
+  /**
+   * Number of matches walked from the head before building the arrays, so that "$a at 0" or
+   * "@a[1]" find their answer at the start of a long list without copying it.
+   */
+  private static final int LINEAR_SCAN = 16;
+
   public Match head;
   public Match tail;
   public int count;
   /**
-   * The matches and their absolute offsets in arrays, built when conditions need them, so that
-   * "@a[i]" or "$a at x" in loops don't walk the list each time.
+   * The matches and their absolute offsets in arrays, built when conditions need matches past
+   * the first few, so that "@a[i]" or "$a at x" in loops don't walk the list each time.
    */
   private Match[] array;
 
@@ -42,13 +48,34 @@ public final class MatchList {
 
   /** The i-th match (from 0), or null. */
   Match get(long i) {
+    if (i < 0 || i >= count) {
+      return null;
+    }
+    if (array == null && i < LINEAR_SCAN) {
+      Match m = head;
+      for (long k = 0; k < i && m != null; k++) {
+        m = m.next;
+      }
+      return m;
+    }
     build();
-    return i >= 0 && i < array.length ? array[(int) i] : null;
+    return array[(int) i];
   }
 
   /** The index of the first match whose absolute offset is at least offset, or count. */
   int lowerBound(long offset) {
-    build();
+    if (array == null) {
+      int i = 0;
+      for (Match m = head; m != null && i < LINEAR_SCAN; m = m.next, i++) {
+        if (m.base + m.offset >= offset) {
+          return i;
+        }
+      }
+      if (i < LINEAR_SCAN) {
+        return i;
+      }
+      build();
+    }
     int lo = 0;
     int hi = offsets.length;
     while (lo < hi) {
@@ -68,13 +95,13 @@ public final class MatchList {
       return 0;
     }
     int start = lowerBound(lo);
-    int end = hi == Long.MAX_VALUE ? offsets.length : lowerBound(hi + 1);
+    int end = hi == Long.MAX_VALUE ? count : lowerBound(hi + 1);
     return end - start;
   }
 
   /** True if a match has its absolute offset in [lo, hi]. */
   boolean anyIn(long lo, long hi) {
-    int i = lowerBound(lo);
-    return i < offsets.length && offsets[i] <= hi;
+    Match m = get(lowerBound(lo));
+    return m != null && m.base + m.offset <= hi;
   }
 }
