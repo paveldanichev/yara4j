@@ -85,7 +85,7 @@ public final class ElfModule implements YaraModule {
     final long size;
     /** Copies of names: all the symbols can reference the same long string. */
     final CopyCache copies;
-    /** The symbol names decoded for each name copy. */
+    /** The symbol names decoded for each name copy longer than CopyCache.MAX_UNSHARED_LENGTH. */
     final Map<byte[], String> names = new IdentityHashMap<>();
 
     Elf(BinaryReader r, boolean is64, boolean be) {
@@ -363,7 +363,10 @@ public final class ElfModule implements YaraModule {
       byte[] name = strTableEntry(e, strTable, strTable + strTableSize, e.symName(sym));
       if (name != null) {
         obj.setString(name, array + "[%i].name", j);
-        s.name = e.names.computeIfAbsent(name, b -> new String(b, StandardCharsets.ISO_8859_1));
+        s.name =
+            name.length <= CopyCache.MAX_UNSHARED_LENGTH
+                ? new String(name, StandardCharsets.ISO_8859_1)
+                : e.names.computeIfAbsent(name, b -> new String(b, StandardCharsets.ISO_8859_1));
       }
       int info = e.symInfo(sym);
       s.bind = info >> 4;

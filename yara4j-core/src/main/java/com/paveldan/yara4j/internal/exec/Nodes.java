@@ -139,18 +139,23 @@ public final class Nodes {
    */
   public static final class Chain extends Node {
     private final boolean or;
-    private final List<Node> operands = new java.util.ArrayList<>();
+    private Node[] operands;
+    private int size;
 
     private Chain(boolean or, Node left, Node right) {
       this.or = or;
-      operands.add(left);
-      operands.add(right);
+      operands = new Node[] {left, right};
+      size = 2;
     }
 
     /** "left or right" or "left and right", extending left if it's a chain of the same op. */
     public static Node of(boolean or, Node left, Node right) {
       if (left instanceof Chain && ((Chain) left).or == or) {
-        ((Chain) left).operands.add(right);
+        Chain c = (Chain) left;
+        if (c.size == c.operands.length) {
+          c.operands = java.util.Arrays.copyOf(c.operands, 2 * c.size);
+        }
+        c.operands[c.size++] = right;
         return left;
       }
       return new Chain(or, left, right);
@@ -158,16 +163,35 @@ public final class Nodes {
 
     @Override
     public long evalLong(ExecContext ctx) {
-      long r1 = operands.get(0).evalLong(ctx);
-      for (int i = 1; i < operands.size(); i++) {
-        // Short-circuit on false for "and", on true for "or".
-        if (r1 != UNDEFINED && (r1 != 0) == or) {
+      return or ? evalOr(ctx) : evalAnd(ctx);
+    }
+
+    /** ((r1 and r2) and r3) ... with the results of "and" in libyara. */
+    private long evalAnd(ExecContext ctx) {
+      Node[] ops = operands;
+      long r1 = ops[0].evalLong(ctx);
+      for (int i = 1; i < size; i++) {
+        if (r1 == 0) {
+          return 0;
+        }
+        // r1 is true or undefined, which counts as false once r2 is evaluated.
+        long r2 = ops[i].evalLong(ctx);
+        r1 = r1 != UNDEFINED && r2 != UNDEFINED && r2 != 0 ? 1 : 0;
+      }
+      return r1;
+    }
+
+    /** ((r1 or r2) or r3) ... with the results of "or" in libyara. */
+    private long evalOr(ExecContext ctx) {
+      Node[] ops = operands;
+      long r1 = ops[0].evalLong(ctx);
+      for (int i = 1; i < size; i++) {
+        if (r1 != UNDEFINED && r1 != 0) {
           return r1;
         }
-        long r2 = operands.get(i).evalLong(ctx);
-        boolean b1 = r1 != UNDEFINED && r1 != 0;
-        boolean b2 = r2 != UNDEFINED && r2 != 0;
-        r1 = (or ? b1 || b2 : b1 && b2) ? 1 : 0;
+        // r1 is false or undefined, so the result is r2.
+        long r2 = ops[i].evalLong(ctx);
+        r1 = r2 != UNDEFINED && r2 != 0 ? 1 : 0;
       }
       return r1;
     }

@@ -11,9 +11,17 @@ import java.util.TreeMap;
  * point to the same large range can't make the module allocate gigabytes. String lengths are
  * memoized for the same reason: finding the end of a long unterminated string for each of its
  * references would take quadratic time.
+ *
+ * <p>Ranges of up to {@link #MAX_UNSHARED_LENGTH} bytes are copied and scanned each time, outside
+ * the budget: their copies take no more memory than the values that hold them, and sharing them
+ * would cost more time than it saves in files with many short strings.
  */
 public final class CopyCache {
+  /** Length up to which ranges are copied and scanned without being shared. */
+  public static final int MAX_UNSHARED_LENGTH = 256;
+
   private final BinaryReader r;
+  private final int maxUnsharedLength;
   private long remaining;
   private boolean refused;
   /** The copies by offset (high 32 bits) and length (low 32 bits). */
@@ -21,10 +29,15 @@ public final class CopyCache {
   /** Ranges known to contain no NUL byte, mapped to the offset of the NUL that ends them. */
   private final TreeMap<Long, Long> nulAfter = new TreeMap<>();
 
-  /** A cache allowing copies of up to budget bytes in total. */
+  /** A cache allowing copies of more than {@link #MAX_UNSHARED_LENGTH} bytes up to budget. */
   public CopyCache(BinaryReader r, long budget) {
+    this(r, budget, MAX_UNSHARED_LENGTH);
+  }
+
+  CopyCache(BinaryReader r, long budget, int maxUnsharedLength) {
     this.r = r;
     this.remaining = budget;
+    this.maxUnsharedLength = maxUnsharedLength;
   }
 
   /**
@@ -42,9 +55,12 @@ public final class CopyCache {
 
   /**
    * The bytes in [offset, offset + length), which must be within the data, or null if the copy
-   * would exceed the budget. The returned array is shared and must not be modified.
+   * would exceed the budget. The returned array may be shared and must not be modified.
    */
   public byte[] bytes(long offset, int length) {
+    if (length <= maxUnsharedLength) {
+      return r.bytes(offset, length);
+    }
     // Offsets and lengths are within the data, which a ByteBuffer limits to 2 GB.
     Long key = offset << 32 | (length & 0xFFFFFFFFL);
     byte[] b = copies.get(key);
@@ -71,6 +87,11 @@ public final class CopyCache {
       return -1;
     }
     long end = Math.min(r.size(), offset + max);
+    long direct = Math.min(end - offset, maxUnsharedLength);
+    int n = r.strnlen(offset, direct);
+    if (n < direct || direct == end - offset) {
+      return n;
+    }
     long nul = nul(offset);
     return (int) (Math.min(nul, end) - offset);
   }
