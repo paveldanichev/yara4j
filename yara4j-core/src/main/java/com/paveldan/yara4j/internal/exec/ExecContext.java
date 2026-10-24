@@ -106,6 +106,7 @@ public final class ExecContext implements ScanContext {
     }
   }
 
+  @Override
   public void checkTimeout() {
     if (deadline != 0 && System.nanoTime() - deadline > 0) {
       throw new YaraError(ErrorCode.SCAN_TIMEOUT);

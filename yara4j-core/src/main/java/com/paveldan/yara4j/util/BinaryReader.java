@@ -2,6 +2,7 @@ package com.paveldan.yara4j.util;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import com.paveldan.yara4j.module.ScanContext;
 
 /**
  * Bounds-aware little/big endian reader over a ByteBuffer, used by modules for parsing file
@@ -9,12 +10,30 @@ import java.nio.charset.StandardCharsets;
  * use {@link #fits} before reading, reads outside the buffer throw IndexOutOfBoundsException.
  */
 public final class BinaryReader {
+  /** Number of bytes read between two checks of the scan timeout. */
+  private static final int TIMEOUT_CHECK_INTERVAL = 1 << 16;
+
+  /** Bytes a {@link #tick} counts as, so that loops check the timeout every 256 iterations. */
+  private static final int ITERATION_COST = TIMEOUT_CHECK_INTERVAL >> 8;
+
   private final ByteBuffer buf;
   private final long size;
+  private final ScanContext context;
+  private long readSinceCheck;
 
   public BinaryReader(ByteBuffer buf) {
+    this(buf, null);
+  }
+
+  /**
+   * A reader that checks the timeout of the scan as it reads, so that parsing loops whose
+   * number of iterations depends on the data stop when it expires, see {@link
+   * ScanContext#checkTimeout}.
+   */
+  public BinaryReader(ByteBuffer buf, ScanContext context) {
     this.buf = buf;
     this.size = buf.limit();
+    this.context = context;
   }
 
   public BinaryReader(byte[] data) {
@@ -38,7 +57,33 @@ public final class BinaryReader {
     if (offset < 0 || offset + n > size) {
       throw new IndexOutOfBoundsException("offset " + offset + " size " + size);
     }
+    read(n);
     return (int) offset;
+  }
+
+  /** The scan whose timeout this reader checks, or null. */
+  public ScanContext context() {
+    return context;
+  }
+
+  /**
+   * Counts an iteration of a loop driven by the data that can iterate without reading it,
+   * aborting the scan every few hundred iterations if its timeout has expired. Does nothing for
+   * a reader without a scan context.
+   */
+  public void tick() {
+    read(ITERATION_COST);
+  }
+
+  /** Counts n bytes read, checking the timeout now and then. */
+  private void read(long n) {
+    if (context != null) {
+      readSinceCheck += n;
+      if (readSinceCheck >= TIMEOUT_CHECK_INTERVAL) {
+        readSinceCheck = 0;
+        context.checkTimeout();
+      }
+    }
   }
 
   public int u8(long offset) {
@@ -112,9 +157,11 @@ public final class BinaryReader {
     long end = Math.min(size, offset + max);
     for (long p = offset; p < end; p++) {
       if (buf.get((int) p) == 0) {
+        read(p - offset + 1);
         return (int) (p - offset);
       }
     }
+    read(end - offset);
     return (int) (end - offset);
   }
 
@@ -125,9 +172,11 @@ public final class BinaryReader {
     }
     for (long p = offset; p < size; p++) {
       if (buf.get((int) p) == 0) {
+        read(p - offset + 1);
         return true;
       }
     }
+    read(size - offset);
     return false;
   }
 
