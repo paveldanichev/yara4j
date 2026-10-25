@@ -14,6 +14,13 @@
   <name>yara4j-cli</name>
   <description>Command line tools (yara and yarac) for yara4j.</description>
 
+  <properties>
+    <!-- The command line tools aren't a library to depend on: they're released only on GitHub,
+         not on Maven Central, so they aren't signed or deployed. -->
+    <gpg.skip>true</gpg.skip>
+    <maven.deploy.skip>true</maven.deploy.skip>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>com.paveldan.yara4j</groupId>

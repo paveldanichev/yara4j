@@ -817,7 +817,7 @@ public final class Nodes {
     }
   }
 
-  /** @a[i] when length is false, !a[i] when length is true. */
+  /** {@code @a[i]} when length is false, {@code !a[i]} when length is true. */
   public static final class OffsetOrLength extends Node {
     final StringRef s;
     final Node index;

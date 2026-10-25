@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         child.project.url.inherit.append.path="false">
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.paveldan.yara4j</groupId>
@@ -11,6 +12,8 @@
 
   <name>yara4j</name>
   <description>Pure Java port of YARA, the pattern matching swiss knife for malware researchers.</description>
+  <!-- The modules point to the repository too, instead of url/artifactId. -->
+  <url>https://github.com/paveldanichev/yara4j</url>
 
   <licenses>
     <license>
@@ -18,6 +21,22 @@
       <url>https://opensource.org/licenses/BSD-3-Clause</url>
     </license>
   </licenses>
+
+  <developers>
+    <developer>
+      <id>paveldanichev</id>
+      <name>paveldanichev</name>
+      <url>https://github.com/paveldanichev</url>
+    </developer>
+  </developers>
+
+  <scm child.scm.connection.inherit.append.path="false"
+       child.scm.developerConnection.inherit.append.path="false"
+       child.scm.url.inherit.append.path="false">
+    <connection>scm:git:https://github.com/paveldanichev/yara4j.git</connection>
+    <developerConnection>scm:git:git@github.com:paveldanichev/yara4j.git</developerConnection>
+    <url>https://github.com/paveldanichev/yara4j</url>
+  </scm>
 
   <modules>
     <module>yara4j-core</module>
@@ -129,7 +148,7 @@
   </build>
 
   <profiles>
-    <!-- Used by the release workflow: also builds the sources jars. -->
+    <!-- Used by the release workflow: also builds the sources and javadoc jars. -->
     <profile>
       <id>release</id>
       <build>
@@ -144,6 +163,48 @@
                 <goals>
                   <goal>jar-no-fork</goal>
                 </goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.11.2</version>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals>
+                  <goal>jar</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!-- Used with the release profile to publish to Maven Central: signs every artifact with
+         GPG, as Central requires. The key's passphrase is read from MAVEN_GPG_PASSPHRASE. -->
+    <profile>
+      <id>central</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.7</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+                <configuration>
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
               </execution>
             </executions>
           </plugin>
