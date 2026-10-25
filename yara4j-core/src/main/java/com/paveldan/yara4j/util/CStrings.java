@@ -30,7 +30,7 @@ public final class CStrings {
     return 99;
   }
 
-  /** Equivalent of strtoll(s, &end, base) on a NUL terminated byte string. */
+  /** Equivalent of {@code strtoll(s, &end, base)} on a NUL terminated byte string. */
   public static ParseResult strtoll(byte[] s, int base) {
     ParseResult r = new ParseResult();
     int len = 0;
